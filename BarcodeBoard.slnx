@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/BarcodeBoard.Core/BarcodeBoard.Core.csproj" />
+    <Project Path="src/BarcodeBoard/BarcodeBoard.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/BarcodeBoard.Core.Tests/BarcodeBoard.Core.Tests.csproj" />
+  </Folder>
+</Solution>

@@ -1,0 +1,10 @@
+<Project>
+  <!-- Identité commune à tous les projets. La version est remplacée à la publication (-p:Version=…). -->
+  <PropertyGroup>
+    <Version>1.0.0</Version>
+    <Authors>ArbitroDev</Authors>
+    <Company>ArbitroDev</Company>
+    <Copyright>Copyright (c) 2026 ArbitroDev. All rights reserved.</Copyright>
+    <RepositoryUrl>https://github.com/ArbitroDev/BarcodeBoard</RepositoryUrl>
+  </PropertyGroup>
+</Project>

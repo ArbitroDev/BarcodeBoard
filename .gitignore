@@ -1,0 +1,12 @@
+# Compilation
+bin/
+obj/
+publish/
+artifacts/
+*.user
+.vs/
+.vscode/
+
+# Notes de conception et maquettes de travail (non publiées)
+docs/specs/
+maquettes/
