@@ -73,6 +73,8 @@ public static class Loc
     public static string EditingSelected => T("Modification du code sélectionné", "Editing the selected code");
     public static string Done => T("Terminer", "Done");
     public static string Add => T("Ajouter", "Add");
+    public static string TooWide => T("Trop large pour être lu en entier ici : agrandissez la fenêtre ou ouvrez-le en plein écran.",
+                                      "Too wide to be read in full here: widen the window or open it in full screen.");
     public static string SwitchToQr => T("Passer en QR code", "Switch to QR code");
     public static string FullScreen => T("Plein écran", "Full screen");
     public static string CopyTextTip => T("Cliquer pour copier le texte", "Click to copy the text");

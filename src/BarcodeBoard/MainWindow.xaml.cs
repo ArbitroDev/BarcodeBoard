@@ -924,11 +924,14 @@ public partial class MainWindow : Window
 
     private void Card_MouseMove(object sender, MouseEventArgs e) => TryStartDrag(sender, e);
 
-    /// <summary>La molette fait défiler la grille, pas le défilement horizontal d'un code trop large.</summary>
-    private void CardScroll_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+    /// <summary>
+    /// Largeur dont dispose un code dans sa carte : la grille moins la marge (16), le remplissage (28) et le bord (2)
+    /// de la carte. Un code plus large s'affine ou affiche un message, pour ne jamais être coupé.
+    /// </summary>
+    private void CodesScroll_ScrollChanged(object sender, ScrollChangedEventArgs e)
     {
-        CodesScroll.ScrollToVerticalOffset(CodesScroll.VerticalOffset - e.Delta);
-        e.Handled = true;
+        if (e.ViewportWidthChange != 0 || e.ExtentHeightChange != 0)
+            _vm.CodeMaxWidth = Math.Max(0, CodesScroll.ViewportWidth - 46);
     }
 
     private void Card_MouseUp(object sender, MouseButtonEventArgs e)

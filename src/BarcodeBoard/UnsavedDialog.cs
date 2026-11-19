@@ -23,18 +23,6 @@ public sealed class InverseBool : IValueConverter
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => value is not true;
 }
 
-/// <summary>Retire une marge fixe d'une largeur (jamais en dessous de zéro).</summary>
-public sealed class Subtract : IValueConverter
-{
-    public double Amount { get; set; }
-
-    public object Convert(object value, Type targetType, object parameter, CultureInfo culture) =>
-        value is double d ? Math.Max(0, d - Amount) : double.PositiveInfinity;
-
-    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) =>
-        throw new NotSupportedException();
-}
-
 public enum UnsavedChoice { Save, Discard, Cancel }
 
 /// <summary>« Enregistrer les modifications de X ? » avec Enregistrer / Ne pas enregistrer / Annuler.</summary>

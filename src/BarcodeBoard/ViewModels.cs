@@ -77,7 +77,12 @@ public sealed class CodeItemViewModel : Observable
     public CodeMatrix? Matrix => _result.Matrix;
     public bool HasError => !_result.Ok;
     public string? ErrorMessage => _result.Error?.Message;
-    public bool CanSwitchToQr => _result.Error?.Kind == CodeErrorKind.NotAscii;
+    /// <summary>Code valide, mais trop large pour la place disponible même à un pixel par module.</summary>
+    public bool TooWide => _result.Ok && Image is null;
+    /// <summary>À la place du code : une erreur, ou un code trop large (jamais un code coupé, illisible).</summary>
+    public bool ShowPlaceholder => HasError || TooWide;
+    public string? PlaceholderMessage => HasError ? ErrorMessage : TooWide ? Loc.TooWide : null;
+    public bool CanSwitchToQr => _result.Error?.Kind == CodeErrorKind.NotAscii || (TooWide && Type == CodeType.Code128);
 
     /// <summary>Taille du cadre d'erreur, pour qu'il occupe la place du code.</summary>
     public double PlaceholderWidth => Owner.Main.CodeSize;
@@ -100,7 +105,12 @@ public sealed class CodeItemViewModel : Observable
 
     public void Rerender()
     {
-        Image = _result.Ok ? CodeImages.ForScreen(_result.Matrix!, Owner.Main.CodeSize, Owner.Main.DpiScale) : null;
+        var main = Owner.Main;
+        Image = _result.Ok ? CodeImages.ForScreen(_result.Matrix!, main.CodeSize, main.DpiScale, main.CodeMaxWidth) : null;
+        Raise(nameof(TooWide));
+        Raise(nameof(ShowPlaceholder));
+        Raise(nameof(PlaceholderMessage));
+        Raise(nameof(CanSwitchToQr));
         Raise(nameof(PlaceholderWidth));
         Raise(nameof(PlaceholderHeight));
     }
@@ -397,6 +407,21 @@ public sealed class MainViewModel : Observable
     }
 
     public bool SideOpen { get => _sideOpen; set => Set(ref _sideOpen, value); }
+
+    private double _codeMaxWidth = double.PositiveInfinity;
+
+    /// <summary>Largeur disponible pour un code dans sa carte (pixels logiques), d'après la largeur de la grille.</summary>
+    public double CodeMaxWidth
+    {
+        get => _codeMaxWidth;
+        set
+        {
+            // Au pixel près : un redimensionnement de fenêtre envoie beaucoup de petites variations.
+            if (Math.Abs(value - _codeMaxWidth) < 1) return;
+            _codeMaxWidth = value;
+            RerenderAll();
+        }
+    }
 
     public bool ScanMode
     {

@@ -181,6 +181,31 @@ public class LayoutTests
     }
 
     [Fact]
+    public void Code_too_wide_shrinks_to_whole_pixels_and_stays_readable()
+    {
+        var text = string.Concat(Enumerable.Range(0, CodeGenerator.Code128MaxLength).Select(i => (char)('A' + i % 26)));
+        var m = CodeGenerator.Generate(text, CodeType.Code128).Matrix!;
+        // À 150 %, un module d'un pixel logique fait 2 pixels physiques : le code dépasse 1 200 px.
+        Assert.True(CodeRaster.Layout(m, 160, 1.5).WidthPx > 1200);
+        var l = CodeRaster.LayoutWithin(m, 160, 1.5, 1200)!.Value;
+        Assert.Equal(1, l.ModulePx);
+        Assert.True(l.WidthPx <= 1200);
+        var px = CodeRaster.Render(m, l);
+        var source = new RGBLuminanceSource(px, l.WidthPx, l.HeightPx, RGBLuminanceSource.BitmapFormat.Gray8);
+        var reader = new BarcodeReaderGeneric();
+        reader.Options.PossibleFormats = [BarcodeFormat.CODE_128];
+        Assert.Equal(text, reader.Decode(source)?.Text);
+    }
+
+    [Fact]
+    public void Code_that_cannot_fit_even_at_one_pixel_is_refused()
+    {
+        var m = CodeGenerator.Generate("LOT-2026-11-0042", CodeType.Code128).Matrix!;
+        Assert.Null(CodeRaster.LayoutWithin(m, 160, 1, m.Width - 1));
+        Assert.Equal(CodeRaster.Layout(m, 160, 1), CodeRaster.LayoutWithin(m, 160, 1, 10_000));
+    }
+
+    [Fact]
     public void Invalid_scale_falls_back_to_100_percent()
     {
         var m = CodeGenerator.Generate("A", CodeType.Qr).Matrix!;
