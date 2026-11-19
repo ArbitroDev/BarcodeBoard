@@ -99,6 +99,9 @@ public sealed class AppSettings
     private static string LegacyFilePath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "CodesEcran", "settings.json");
 
+    /// <summary>Réglages communs à toutes les fenêtres (thème, taille des codes…) : la dernière fermée enregistre.</summary>
+    public static AppSettings Current { get; } = Load();
+
     public static AppSettings Load()
     {
         try

@@ -245,7 +245,7 @@
         </Grid.RowDefinitions>
 
         <!-- ===================== Barre de titre et onglets ===================== -->
-        <DockPanel Grid.Row="0">
+        <DockPanel x:Name="TabBar" Grid.Row="0">
             <!-- Place réservée aux vrais boutons système quand Mica est actif (Windows 11) -->
             <Border x:Name="NativeCaptionSpace" DockPanel.Dock="Right" Width="140" Visibility="Collapsed"/>
             <StackPanel x:Name="CaptionButtons" DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Top" WindowChrome.IsHitTestVisibleInChrome="True">
@@ -337,7 +337,12 @@
                     <ItemsControl.ItemTemplate>
                         <DataTemplate DataType="{x:Type local:TabViewModel}">
                             <Grid x:Name="TabRoot" Height="34" Background="Transparent" ToolTip="{Binding ToolTip}"
-                                  MouseLeftButtonDown="Tab_MouseDown" MouseUp="Tab_MouseUp">
+                                  MouseLeftButtonDown="Tab_MouseDown" MouseMove="Tab_MouseMove" MouseUp="Tab_MouseUp"
+                                  ContextMenuOpening="Tab_ContextMenuOpening">
+                                <!-- Rempli à l'ouverture : nouvelle fenêtre, autres fenêtres, fermer -->
+                                <Grid.ContextMenu>
+                                    <ContextMenu/>
+                                </Grid.ContextMenu>
                                 <!-- Onglet actif : fond jusqu'en bas, fondu dans la barre d'outils -->
                                 <Border x:Name="TabBd" CornerRadius="7,7,0,0" Background="Transparent"/>
                                 <!-- Onglet survolé, comme dans l'Explorateur : il s'arrête 1 px au-dessus de la barre d'outils -->

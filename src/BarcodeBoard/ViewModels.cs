@@ -124,8 +124,22 @@ public sealed class TabViewModel : Observable
         Codes.CollectionChanged += OnCodesChanged;
     }
 
-    public MainViewModel Main { get; }
+    /// <summary>La fenêtre qui affiche l'onglet. Change quand l'onglet passe dans une autre fenêtre.</summary>
+    public MainViewModel Main { get; private set; }
     public int UntitledNumber { get; }
+
+    /// <summary>Rattache l'onglet à une autre fenêtre : ses codes sont redessinés à sa taille et à son échelle.</summary>
+    internal void AttachTo(MainViewModel main)
+    {
+        Main = main;
+        ScanFocus = null;
+        foreach (var c in Codes)
+        {
+            c.IsScanFocus = false;
+            c.IsBlurred = false;
+            c.Rerender();
+        }
+    }
     public ObservableCollection<CodeItemViewModel> Codes { get; } = [];
 
     public string? FilePath
@@ -345,7 +359,8 @@ public sealed class MainViewModel : Observable
     private double _dpiScale = 1;
     private bool _sideOpen = true, _scanMode;
     private string? _lastRead;
-    private int _untitled;
+    /// <summary>Numéro des onglets « Sans titre », commun à toutes les fenêtres : jamais deux « Sans titre 1 ».</summary>
+    private static int _untitled;
 
     public ObservableCollection<TabViewModel> Tabs { get; } = [];
 
@@ -427,6 +442,26 @@ public sealed class MainViewModel : Observable
         Tabs.Add(tab);
         SelectedTab = tab;
         return tab;
+    }
+
+    /// <summary>Accueille un onglet venu d'une autre fenêtre, à la position donnée, et l'affiche.</summary>
+    public void Adopt(TabViewModel tab, int index)
+    {
+        tab.AttachTo(this);
+        Tabs.Insert(Math.Clamp(index, 0, Tabs.Count), tab);
+        SelectedTab = tab;
+        UpdateScanFlags();
+    }
+
+    /// <summary>Retire un onglet qui part dans une autre fenêtre ; l'onglet voisin prend sa place.</summary>
+    public void Release(TabViewModel tab)
+    {
+        int index = Tabs.IndexOf(tab);
+        if (index < 0) return;
+        if (tab == _selectedTab && Tabs.Count > 1)
+            SelectedTab = Tabs[index + 1 < Tabs.Count ? index + 1 : index - 1];
+        Tabs.Remove(tab);
+        tab.IsActive = false;
     }
 
     public void UpdateScanFlags()

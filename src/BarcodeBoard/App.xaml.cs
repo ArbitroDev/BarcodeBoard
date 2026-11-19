@@ -1,6 +1,7 @@
 ﻿using System.IO;
 using System.Windows;
 using System.Windows.Threading;
+using BarcodeBoard.Core;
 
 namespace BarcodeBoard;
 
@@ -15,6 +16,27 @@ public partial class App : Application
         if (i >= 0 && i + 1 < args.Length) Core.Lang.French = args[i + 1] == "fr";
 #endif
         DispatcherUnhandledException += OnUnhandledException;
+    }
+
+    protected override void OnStartup(StartupEventArgs e)
+    {
+        base.OnStartup(e);
+        // Fichiers .codes passés au lancement : double-clic dans l'Explorateur, glisser sur l'icône.
+        var files = e.Args
+            .Where(a => !a.StartsWith("--") && File.Exists(a)
+                        && string.Equals(Path.GetExtension(a), CodesFile.Extension, StringComparison.OrdinalIgnoreCase))
+            .Select(Path.GetFullPath)
+            .ToList();
+
+        // Les options de vérification (--demo, --capture…) lancent une instance à part, sans déranger celle ouverte.
+        bool checkRun = e.Args.Any(a => a.StartsWith("--"));
+        if (!checkRun && !SingleInstance.TryBecomePrimary(AppWindows.HandleRequest) && SingleInstance.SendToPrimary(files))
+        {
+            Shutdown();
+            return;
+        }
+
+        new MainWindow(startupFiles: files, isFirst: true).Show();
     }
 
     /// <summary>
@@ -32,7 +54,7 @@ public partial class App : Application
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
 
         e.Handled = true;
-        var owner = MainWindow is { IsLoaded: true } w ? w : null;
+        var owner = AppWindows.LastActive is { IsLoaded: true } w ? w : null;
         var message = Loc.UnexpectedError(e.Exception.Message);
         if (owner is null) MessageBox.Show(message, Loc.AppName, MessageBoxButton.OK, MessageBoxImage.Error);
         else MessageBox.Show(owner, message, Loc.AppName, MessageBoxButton.OK, MessageBoxImage.Error);
