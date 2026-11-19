@@ -138,7 +138,8 @@ Si le dossier du projet a un chemin très long, la publication peut dépasser la
 
 Les signalements de bugs et les suggestions sont bienvenus dans les
 [issues](https://github.com/ArbitroDev/BarcodeBoard/issues). Les pull requests sont acceptées
-dans le cadre défini par la licence (section 3).
+dans le cadre défini par la licence (section 3) : lisez d'abord le guide
+[CONTRIBUTING.md](CONTRIBUTING.md) (en anglais).
 
 ## Licence
 

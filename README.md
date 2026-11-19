@@ -137,7 +137,7 @@ limit: publish from a folder with a short path instead.
 
 Bug reports and suggestions are welcome in the
 [issues](https://github.com/ArbitroDev/BarcodeBoard/issues). Pull requests are accepted within
-the terms set by the license (section 3).
+the terms set by the license (section 3): read [CONTRIBUTING.md](CONTRIBUTING.md) first.
 
 ## License
 
