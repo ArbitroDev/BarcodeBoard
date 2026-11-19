@@ -245,7 +245,7 @@
         </Grid.RowDefinitions>
 
         <!-- ===================== Barre de titre et onglets ===================== -->
-        <DockPanel Grid.Row="0">
+        <DockPanel x:Name="TabBar" Grid.Row="0">
             <!-- Place réservée aux vrais boutons système quand Mica est actif (Windows 11) -->
             <Border x:Name="NativeCaptionSpace" DockPanel.Dock="Right" Width="140" Visibility="Collapsed"/>
             <StackPanel x:Name="CaptionButtons" DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Top" WindowChrome.IsHitTestVisibleInChrome="True">
@@ -337,7 +337,12 @@
                     <ItemsControl.ItemTemplate>
                         <DataTemplate DataType="{x:Type local:TabViewModel}">
                             <Grid x:Name="TabRoot" Height="34" Background="Transparent" ToolTip="{Binding ToolTip}"
-                                  MouseLeftButtonDown="Tab_MouseDown" MouseUp="Tab_MouseUp">
+                                  MouseLeftButtonDown="Tab_MouseDown" MouseMove="Tab_MouseMove" MouseUp="Tab_MouseUp"
+                                  ContextMenuOpening="Tab_ContextMenuOpening">
+                                <!-- Rempli à l'ouverture : nouvelle fenêtre, autres fenêtres, fermer -->
+                                <Grid.ContextMenu>
+                                    <ContextMenu/>
+                                </Grid.ContextMenu>
                                 <!-- Onglet actif : fond jusqu'en bas, fondu dans la barre d'outils -->
                                 <Border x:Name="TabBd" CornerRadius="7,7,0,0" Background="Transparent"/>
                                 <!-- Onglet survolé, comme dans l'Explorateur : il s'arrête 1 px au-dessus de la barre d'outils -->
@@ -632,7 +637,7 @@
 
                     <!-- Grille des codes -->
                     <ScrollViewer x:Name="CodesScroll" Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
-                                  Padding="20,14,4,8" Focusable="True" FocusVisualStyle="{x:Null}">
+                                  Padding="20,14,4,8" Focusable="True" FocusVisualStyle="{x:Null}" ScrollChanged="CodesScroll_ScrollChanged">
                         <Grid>
                             <ItemsControl x:Name="CodesGrid" ItemsSource="{Binding SelectedTab.Codes}" Focusable="False">
                                 <ItemsControl.ItemsPanel>
@@ -647,21 +652,18 @@
                                                     Padding="14,14,14,10" MinWidth="170"
                                                     MouseLeftButtonDown="Card_MouseDown" MouseMove="Card_MouseMove" MouseLeftButtonUp="Card_MouseUp">
                                                 <StackPanel>
-                                                    <!-- Un code plus large que la fenêtre défile horizontalement au lieu d'être rogné :
-                                                         jamais réduit, il resterait sinon illisible -->
-                                                    <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled"
-                                                                  Focusable="False" PreviewMouseWheel="CardScroll_PreviewMouseWheel"
-                                                                  MaxWidth="{Binding ViewportWidth, ElementName=CodesScroll, Converter={StaticResource CardInnerWidth}}">
+                                                    <!-- Un code doit toujours être affiché en entier pour être lu : trop large, il s'affine
+                                                         (pixels entiers) ou laisse place à un message, jamais coupé (CodeImages.ForScreen) -->
                                                     <Grid HorizontalAlignment="Center">
                                                         <Grid x:Name="CodeVisual">
                                                             <Image Source="{Binding Image}" Stretch="None" SnapsToDevicePixels="True"
                                                                    RenderOptions.BitmapScalingMode="NearestNeighbor"
-                                                                   Visibility="{Binding HasError, Converter={StaticResource NotVis}}"/>
+                                                                   Visibility="{Binding ShowPlaceholder, Converter={StaticResource NotVis}}"/>
                                                             <Grid Width="{Binding PlaceholderWidth}" MinHeight="{Binding PlaceholderHeight}"
-                                                                  Visibility="{Binding HasError, Converter={StaticResource Vis}}">
+                                                                  Visibility="{Binding ShowPlaceholder, Converter={StaticResource Vis}}">
                                                                 <Rectangle Fill="{DynamicResource CardBg}" Stroke="{DynamicResource DashStroke}" StrokeThickness="1.5" StrokeDashArray="3 2" RadiusX="4" RadiusY="4"/>
                                                                 <StackPanel VerticalAlignment="Center" Margin="10">
-                                                                    <TextBlock Text="{Binding ErrorMessage}" TextWrapping="Wrap" TextAlignment="Center" Foreground="{DynamicResource Muted}" FontSize="12.5"/>
+                                                                    <TextBlock Text="{Binding PlaceholderMessage}" TextWrapping="Wrap" TextAlignment="Center" Foreground="{DynamicResource Muted}" FontSize="12.5"/>
                                                                     <Button Style="{StaticResource ToolButton}" Foreground="{DynamicResource AccentText}" Padding="8,4"
                                                                             HorizontalAlignment="Center" Margin="0,6,0,0" Click="SwitchToQr_Click"
                                                                             Visibility="{Binding CanSwitchToQr, Converter={StaticResource Vis}}">
@@ -675,7 +677,6 @@
                                                             <TextBlock Text="{Binding Text}" FontFamily="{StaticResource Mono}" FontSize="13" TextWrapping="Wrap" TextAlignment="Center"/>
                                                         </Border>
                                                     </Grid>
-                                                    </ScrollViewer>
                                                     <Border x:Name="CardText" Style="{StaticResource CopyText}" Margin="0,6,0,0" HorizontalAlignment="Center"
                                                             MouseLeftButtonUp="CopyText_MouseUp">
                                                         <TextBlock Text="{Binding Text}" FontFamily="{StaticResource Mono}" FontSize="12.5" Foreground="{DynamicResource TextBrush}"

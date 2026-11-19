@@ -77,7 +77,12 @@ public sealed class CodeItemViewModel : Observable
     public CodeMatrix? Matrix => _result.Matrix;
     public bool HasError => !_result.Ok;
     public string? ErrorMessage => _result.Error?.Message;
-    public bool CanSwitchToQr => _result.Error?.Kind == CodeErrorKind.NotAscii;
+    /// <summary>Code valide, mais trop large pour la place disponible même à un pixel par module.</summary>
+    public bool TooWide => _result.Ok && Image is null;
+    /// <summary>À la place du code : une erreur, ou un code trop large (jamais un code coupé, illisible).</summary>
+    public bool ShowPlaceholder => HasError || TooWide;
+    public string? PlaceholderMessage => HasError ? ErrorMessage : TooWide ? Loc.TooWide : null;
+    public bool CanSwitchToQr => _result.Error?.Kind == CodeErrorKind.NotAscii || (TooWide && Type == CodeType.Code128);
 
     /// <summary>Taille du cadre d'erreur, pour qu'il occupe la place du code.</summary>
     public double PlaceholderWidth => Owner.Main.CodeSize;
@@ -100,7 +105,12 @@ public sealed class CodeItemViewModel : Observable
 
     public void Rerender()
     {
-        Image = _result.Ok ? CodeImages.ForScreen(_result.Matrix!, Owner.Main.CodeSize, Owner.Main.DpiScale) : null;
+        var main = Owner.Main;
+        Image = _result.Ok ? CodeImages.ForScreen(_result.Matrix!, main.CodeSize, main.DpiScale, main.CodeMaxWidth) : null;
+        Raise(nameof(TooWide));
+        Raise(nameof(ShowPlaceholder));
+        Raise(nameof(PlaceholderMessage));
+        Raise(nameof(CanSwitchToQr));
         Raise(nameof(PlaceholderWidth));
         Raise(nameof(PlaceholderHeight));
     }
@@ -124,8 +134,22 @@ public sealed class TabViewModel : Observable
         Codes.CollectionChanged += OnCodesChanged;
     }
 
-    public MainViewModel Main { get; }
+    /// <summary>La fenêtre qui affiche l'onglet. Change quand l'onglet passe dans une autre fenêtre.</summary>
+    public MainViewModel Main { get; private set; }
     public int UntitledNumber { get; }
+
+    /// <summary>Rattache l'onglet à une autre fenêtre : ses codes sont redessinés à sa taille et à son échelle.</summary>
+    internal void AttachTo(MainViewModel main)
+    {
+        Main = main;
+        ScanFocus = null;
+        foreach (var c in Codes)
+        {
+            c.IsScanFocus = false;
+            c.IsBlurred = false;
+            c.Rerender();
+        }
+    }
     public ObservableCollection<CodeItemViewModel> Codes { get; } = [];
 
     public string? FilePath
@@ -345,7 +369,8 @@ public sealed class MainViewModel : Observable
     private double _dpiScale = 1;
     private bool _sideOpen = true, _scanMode;
     private string? _lastRead;
-    private int _untitled;
+    /// <summary>Numéro des onglets « Sans titre », commun à toutes les fenêtres : jamais deux « Sans titre 1 ».</summary>
+    private static int _untitled;
 
     public ObservableCollection<TabViewModel> Tabs { get; } = [];
 
@@ -382,6 +407,21 @@ public sealed class MainViewModel : Observable
     }
 
     public bool SideOpen { get => _sideOpen; set => Set(ref _sideOpen, value); }
+
+    private double _codeMaxWidth = double.PositiveInfinity;
+
+    /// <summary>Largeur disponible pour un code dans sa carte (pixels logiques), d'après la largeur de la grille.</summary>
+    public double CodeMaxWidth
+    {
+        get => _codeMaxWidth;
+        set
+        {
+            // Au pixel près : un redimensionnement de fenêtre envoie beaucoup de petites variations.
+            if (Math.Abs(value - _codeMaxWidth) < 1) return;
+            _codeMaxWidth = value;
+            RerenderAll();
+        }
+    }
 
     public bool ScanMode
     {
@@ -427,6 +467,26 @@ public sealed class MainViewModel : Observable
         Tabs.Add(tab);
         SelectedTab = tab;
         return tab;
+    }
+
+    /// <summary>Accueille un onglet venu d'une autre fenêtre, à la position donnée, et l'affiche.</summary>
+    public void Adopt(TabViewModel tab, int index)
+    {
+        tab.AttachTo(this);
+        Tabs.Insert(Math.Clamp(index, 0, Tabs.Count), tab);
+        SelectedTab = tab;
+        UpdateScanFlags();
+    }
+
+    /// <summary>Retire un onglet qui part dans une autre fenêtre ; l'onglet voisin prend sa place.</summary>
+    public void Release(TabViewModel tab)
+    {
+        int index = Tabs.IndexOf(tab);
+        if (index < 0) return;
+        if (tab == _selectedTab && Tabs.Count > 1)
+            SelectedTab = Tabs[index + 1 < Tabs.Count ? index + 1 : index - 1];
+        Tabs.Remove(tab);
+        tab.IsActive = false;
     }
 
     public void UpdateScanFlags()

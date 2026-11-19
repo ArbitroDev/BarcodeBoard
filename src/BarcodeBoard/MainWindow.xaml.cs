@@ -20,7 +20,9 @@ public partial class MainWindow : Window
     private static string FileFilter => Loc.FileFilter;
 
     private readonly MainViewModel _vm = new();
-    private readonly AppSettings _settings = AppSettings.Load();
+    private readonly AppSettings _settings = AppSettings.Current;
+    private readonly IReadOnlyList<string> _startupFiles;
+    private readonly bool _isFirst;
     private readonly DispatcherTimer _toastTimer = new() { Interval = TimeSpan.FromSeconds(2.4) };
     private readonly StringBuilder _scanBuffer = new();
     private CodeItemViewModel? _fullItem;
@@ -30,10 +32,16 @@ public partial class MainWindow : Window
 
     private bool _mica;
 
-    public MainWindow()
+    /// <param name="startupFiles">Fichiers .codes à ouvrir une fois la fenêtre affichée.</param>
+    /// <param name="adopted">Onglet sorti d'une autre fenêtre : la nouvelle fenêtre ne contient que lui.</param>
+    /// <param name="isFirst">Première fenêtre de l'application : elle reprend la position et l'état enregistrés.</param>
+    public MainWindow(IReadOnlyList<string>? startupFiles = null, TabViewModel? adopted = null, bool isFirst = false)
     {
-        Theme.Apply(Theme.Parse(_settings.Theme));
+        _startupFiles = startupFiles ?? [];
+        _isFirst = isFirst;
+        if (isFirst) Theme.Apply(Theme.Parse(_settings.Theme));
         InitializeComponent();
+        AppWindows.Register(this);
 #if DEBUG
         // Captures d'écran : la fenêtre s'affiche sans prendre le clavier de l'utilisateur.
         if (Environment.GetCommandLineArgs().Contains("--topmost")) ShowActivated = false;
@@ -44,8 +52,10 @@ public partial class MainWindow : Window
         DataContext = _vm;
         _vm.CodeSize = _settings.CodeSize;
         _vm.SideOpen = _settings.SideOpen;
-        _vm.NewTab();
-        ApplySavedBounds();
+        if (adopted is not null) _vm.Adopt(adopted, 0);
+        else _vm.NewTab();
+        if (isFirst) ApplySavedBounds();
+        else PlaceNextToLastWindow();
 
         _toastTimer.Tick += (_, _) => HideToast();
         _vm.PropertyChanged += Vm_PropertyChanged;
@@ -85,15 +95,12 @@ public partial class MainWindow : Window
         UpdateTitleIcon();
         ApplySideWidth();
         HookTabStrip();
-        // Fichiers .codes passés au lancement (double-clic dans l'Explorateur, glisser sur l'icône).
-        foreach (var arg in Environment.GetCommandLineArgs().Skip(1))
-            if (!arg.StartsWith("--") && File.Exists(arg) && string.Equals(Path.GetExtension(arg), CodesFile.Extension, StringComparison.OrdinalIgnoreCase))
-                OpenPath(arg);
+        foreach (var file in _startupFiles) OpenPath(file);
         UpdateMaximizedLayout();
         UpdateCaptionMetrics();
         ComposerBox.Focus();
 #if DEBUG
-        DebugScenario.Run(this, _vm);
+        if (_isFirst) DebugScenario.Run(this, _vm);
 #endif
     }
 
@@ -101,7 +108,7 @@ public partial class MainWindow : Window
     {
         base.OnSourceInitialized(e);
         _mica = !NoMicaRequested() && Backdrop.TryApply(this);
-        RestorePlacement();
+        if (_isFirst) RestorePlacement();
         if (_mica)
         {
             // Vrais boutons système à la place des boutons dessinés, couches translucides sur Mica Alt.
@@ -199,6 +206,17 @@ public partial class MainWindow : Window
         if (hwnd == IntPtr.Zero || !Native.GetWindowPlacement(hwnd, ref placement)) return;
         var r = placement.normalPosition;
         _settings.Placement = [r.Left, r.Top, r.Right, r.Bottom];
+    }
+
+    /// <summary>Nouvelle fenêtre : même taille que la dernière utilisée, décalée pour ne pas la cacher.</summary>
+    private void PlaceNextToLastWindow()
+    {
+        WindowStartupLocation = WindowStartupLocation.CenterScreen;
+        if (AppWindows.All.FirstOrDefault(w => w != this) is not { } other) return;
+        var b = other.WindowState == WindowState.Normal ? new Rect(other.Left, other.Top, other.Width, other.Height) : other.RestoreBounds;
+        if (b.IsEmpty) return;
+        WindowStartupLocation = WindowStartupLocation.Manual;
+        Left = b.Left + 32; Top = b.Top + 32; Width = b.Width; Height = b.Height;
     }
 
     private void ApplySavedBounds()
@@ -440,6 +458,159 @@ public partial class MainWindow : Window
         _vm.SelectedTab = tab;
         // Pas de renommage en mode scan : Entrée et Échap y sont réservés à la douchette.
         if (e.ClickCount == 2 && !_vm.ScanMode) BeginRename(tab, (DependencyObject)sender);
+        else if (e.ClickCount == 1)
+        {
+            _tabDragCandidate = tab;
+            _tabDragStart = e.GetPosition(this);
+            _tabGrab = e.GetPosition((IInputElement)sender);
+            // L'onglet garde la souris : sinon il ne la suit plus dès qu'elle en sort, avant d'être arraché.
+            ((UIElement)sender).CaptureMouse();
+        }
+    }
+
+    // ---- Sortir un onglet dans sa propre fenêtre, ou le fusionner dans une autre (comme l'Explorateur) ----
+
+    private TabViewModel? _tabDragCandidate;
+    private Point _tabDragStart, _tabGrab;
+
+    private void Tab_MouseMove(object sender, MouseEventArgs e)
+    {
+        if (e.LeftButton != MouseButtonState.Pressed)
+        {
+            _tabDragCandidate = null;
+            if (sender is UIElement { IsMouseCaptured: true } element) element.ReleaseMouseCapture();
+            return;
+        }
+        if (_tabDragCandidate is not { } tab || tab.IsRenaming) return;
+        // L'onglet est arraché quand le pointeur quitte la bande d'onglets vers le haut ou le bas.
+        if (Math.Abs(e.GetPosition(this).Y - _tabDragStart.Y) < 18) return;
+        _tabDragCandidate = null;
+        TearOff(tab, _tabGrab);
+    }
+
+    /// <summary>
+    /// L'onglet part dans une nouvelle fenêtre qui suit la souris jusqu'au relâchement (seul onglet : c'est la fenêtre
+    /// elle-même qui suit). Relâché sur la barre d'onglets d'une autre fenêtre, il s'y fusionne.
+    /// </summary>
+    private void TearOff(TabViewModel tab, Point grab)
+    {
+        CommitPendingRenames();
+        MainWindow moving = this;
+        if (_vm.Tabs.Count > 1)
+        {
+            var normal = WindowState == WindowState.Normal ? new Rect(Left, Top, Width, Height) : RestoreBounds;
+            var pointer = PointToScreenDip(Mouse.GetPosition(this));
+            _vm.Release(tab);
+            moving = new MainWindow(adopted: tab)
+            {
+                WindowStartupLocation = WindowStartupLocation.Manual,
+                Width = normal.Width,
+                Height = normal.Height,
+                Left = pointer.X - 60,
+                Top = pointer.Y - 20,
+            };
+            moving.Show();
+            moving.UpdateLayout();
+            moving.PlaceTabUnderPointer(tab, grab);
+        }
+
+        moving.FollowPointerUntilRelease();
+
+        if (!Native.GetCursorPos(out var pt)) return;
+        var target = AppWindows.All.FirstOrDefault(w => w != moving && w.IsOverTabBar(pt));
+        target?.TakeTab(moving, tab, pt);
+    }
+
+    private Point PointToScreenDip(Point p)
+    {
+        var screen = PointToScreen(p);
+        double s = _vm.DpiScale;
+        return new Point(screen.X / s, screen.Y / s);
+    }
+
+    /// <summary>Place la fenêtre pour que son onglet soit sous le pointeur, au point où il a été saisi.</summary>
+    private void PlaceTabUnderPointer(TabViewModel tab, Point grab)
+    {
+        var hwnd = new WindowInteropHelper(this).Handle;
+        if (TabStrip.ItemContainerGenerator.ContainerFromItem(tab) is not FrameworkElement header
+            || !Native.GetCursorPos(out var pt) || !Native.GetWindowRect(hwnd, out var win) || !Native.GetClientScreenRect(hwnd, out var client))
+            return;
+        var origin = header.TranslatePoint(new Point(grab.X, grab.Y), this);
+        double s = _vm.DpiScale;
+        int x = pt.X - (client.Left - win.Left) - (int)Math.Round(origin.X * s);
+        int y = pt.Y - (client.Top - win.Top) - (int)Math.Round(origin.Y * s);
+        Native.SetWindowPos(hwnd, IntPtr.Zero, x, y, 0, 0, Native.SWP_NOSIZE | Native.SWP_NOZORDER);
+    }
+
+    /// <summary>Déplacement de fenêtre de Windows, comme en tirant la barre de titre ; rend la main au relâchement.</summary>
+    private void FollowPointerUntilRelease()
+    {
+        var hwnd = new WindowInteropHelper(this).Handle;
+        Mouse.Capture(null);
+        Native.ReleaseCapture();
+        Native.SendMessage(hwnd, Native.WM_NCLBUTTONDOWN, Native.HTCAPTION, IntPtr.Zero);
+    }
+
+    /// <summary>Vrai si ce point de l'écran (pixels physiques) est sur la barre d'onglets de cette fenêtre.</summary>
+    private bool IsOverTabBar(Native.POINT pt)
+    {
+        if (!IsVisible || WindowState == WindowState.Minimized) return false;
+        var topLeft = TabBar.PointToScreen(new Point(0, 0));
+        var bottomRight = TabBar.PointToScreen(new Point(TabBar.ActualWidth, TabBar.ActualHeight));
+        return pt.X >= topLeft.X && pt.X < bottomRight.X && pt.Y >= topLeft.Y && pt.Y < bottomRight.Y;
+    }
+
+    /// <summary>Accueille l'onglet lâché sur la barre d'onglets, à l'endroit du pointeur ; la fenêtre d'origine vidée se ferme.</summary>
+    private void TakeTab(MainWindow source, TabViewModel tab, Native.POINT pt)
+    {
+        var local = TabStrip.PointFromScreen(new Point(pt.X, pt.Y));
+        int index = _vm.Tabs.Count;
+        for (int i = 0; i < _vm.Tabs.Count; i++)
+        {
+            if (TabStrip.ItemContainerGenerator.ContainerFromIndex(i) is not FrameworkElement c) continue;
+            if (local.X < c.TranslatePoint(new Point(c.ActualWidth / 2, 0), TabStrip).X) { index = i; break; }
+        }
+        MoveTab(source, tab, this, index);
+    }
+
+    private static void MoveTab(MainWindow from, TabViewModel tab, MainWindow to, int index)
+    {
+        from._vm.Release(tab);
+        to._vm.Adopt(tab, index);
+        to.BringToFront();
+        if (from._vm.Tabs.Count == 0)
+            from.Dispatcher.BeginInvoke(from.CloseWithoutPrompts);
+    }
+
+    private void Tab_ContextMenuOpening(object sender, ContextMenuEventArgs e)
+    {
+        if (sender is not FrameworkElement { DataContext: TabViewModel tab, ContextMenu: { } menu }) return;
+        menu.Items.Clear();
+
+        var newWindow = new MenuItem { Header = Loc.MoveToNewWindow, IsEnabled = _vm.Tabs.Count > 1 };
+        newWindow.Click += (_, _) =>
+        {
+            CommitPendingRenames();
+            _vm.Release(tab);
+            new MainWindow(adopted: tab).Show();
+        };
+        menu.Items.Add(newWindow);
+
+        var others = AppWindows.All.Where(w => w != this).ToList();
+        var moveTo = new MenuItem { Header = Loc.MoveToWindow, IsEnabled = others.Count > 0 };
+        foreach (var other in others)
+        {
+            var label = Loc.WindowLabel(other._vm.SelectedTab.Name, other._vm.Tabs.Count).Replace("_", "__");
+            var item = new MenuItem { Header = label };
+            item.Click += (_, _) => { CommitPendingRenames(); MoveTab(this, tab, other, other._vm.Tabs.Count); };
+            moveTo.Items.Add(item);
+        }
+        menu.Items.Add(moveTo);
+
+        menu.Items.Add(new Separator());
+        var close = new MenuItem { Header = Loc.CloseTab, InputGestureText = "Ctrl+W" };
+        close.Click += (_, _) => CloseTab(tab);
+        menu.Items.Add(close);
     }
 
     // ---- Renommer un onglet (double-clic) ----
@@ -513,6 +684,8 @@ public partial class MainWindow : Window
 
     private void Tab_MouseUp(object sender, MouseButtonEventArgs e)
     {
+        _tabDragCandidate = null;
+        if (sender is UIElement { IsMouseCaptured: true } element) element.ReleaseMouseCapture();
         if (e.ChangedButton == MouseButton.Middle && ((FrameworkElement)sender).DataContext is TabViewModel tab)
             CloseTab(tab);
     }
@@ -587,12 +760,27 @@ public partial class MainWindow : Window
         foreach (var path in dialog.FileNames) OpenPath(path);
     }
 
+    /// <summary>Onglet de cette fenêtre lié à ce fichier, s'il y en a un.</summary>
+    internal TabViewModel? FindTab(string fullPath) => _vm.Tabs.FirstOrDefault(t => t.FilePath is not null
+        && string.Equals(Path.GetFullPath(t.FilePath), fullPath, StringComparison.OrdinalIgnoreCase));
+
+    internal void BringToFront()
+    {
+        if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
+        Activate();
+    }
+
     internal void OpenPath(string path)
     {
         var full = Path.GetFullPath(path);
-        var existing = _vm.Tabs.FirstOrDefault(t => t.FilePath is not null
-            && string.Equals(Path.GetFullPath(t.FilePath), full, StringComparison.OrdinalIgnoreCase));
-        if (existing is not null) { _vm.SelectedTab = existing; return; }
+        // Déjà ouvert, ici ou dans une autre fenêtre : on y va plutôt que de l'ouvrir deux fois.
+        if (AppWindows.FindFile(full) is { } found)
+        {
+            var (window, existing) = found;
+            window._vm.SelectedTab = existing;
+            if (window != this) window.BringToFront();
+            return;
+        }
 
         CodesDocument doc;
         try { doc = CodesFile.Load(full); }
@@ -736,11 +924,14 @@ public partial class MainWindow : Window
 
     private void Card_MouseMove(object sender, MouseEventArgs e) => TryStartDrag(sender, e);
 
-    /// <summary>La molette fait défiler la grille, pas le défilement horizontal d'un code trop large.</summary>
-    private void CardScroll_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+    /// <summary>
+    /// Largeur dont dispose un code dans sa carte : la grille moins la marge (16), le remplissage (28) et le bord (2)
+    /// de la carte. Un code plus large s'affine ou affiche un message, pour ne jamais être coupé.
+    /// </summary>
+    private void CodesScroll_ScrollChanged(object sender, ScrollChangedEventArgs e)
     {
-        CodesScroll.ScrollToVerticalOffset(CodesScroll.VerticalOffset - e.Delta);
-        e.Handled = true;
+        if (e.ViewportWidthChange != 0 || e.ExtentHeightChange != 0)
+            _vm.CodeMaxWidth = Math.Max(0, CodesScroll.ViewportWidth - 46);
     }
 
     private void Card_MouseUp(object sender, MouseButtonEventArgs e)
@@ -1048,4 +1239,11 @@ internal static class Native
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern IntPtr DefWindowProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam);
     [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr hwnd, IntPtr after, int x, int y, int cx, int cy, uint flags);
+    public const uint SWP_NOSIZE = 0x1, SWP_NOZORDER = 0x4;
+
+    [DllImport("user32.dll")] public static extern bool GetCursorPos(out POINT point);
+    [DllImport("user32.dll")] public static extern bool ReleaseCapture();
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern IntPtr SendMessage(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam);
+    public const int WM_NCLBUTTONDOWN = 0x00A1;
+    public static readonly IntPtr HTCAPTION = 2;
 }

@@ -26,6 +26,11 @@ public static class Loc
     public static string CloseTabTip => T("Fermer l'onglet (Ctrl+W)", "Close tab (Ctrl+W)");
     public static string NewTabTip => T("Nouvel onglet (Ctrl+T)", "New tab (Ctrl+T)");
     public static string AllTabs => T("Tous les onglets", "All tabs");
+    public static string MoveToNewWindow => T("Déplacer vers une nouvelle fenêtre", "Move to new window");
+    public static string MoveToWindow => T("Déplacer vers la fenêtre", "Move to window");
+    public static string WindowLabel(string selectedTab, int tabCount) =>
+        tabCount == 1 ? selectedTab : T($"{selectedTab} et {tabCount - 1} autre(s)", $"{selectedTab} and {tabCount - 1} more");
+    public static string CloseTab => T("Fermer l'onglet", "Close tab");
     public static string Untitled(int n) => T($"Sans titre {n}", $"Untitled {n}");
 
     // ---- Barre d'outils ----
@@ -68,6 +73,8 @@ public static class Loc
     public static string EditingSelected => T("Modification du code sélectionné", "Editing the selected code");
     public static string Done => T("Terminer", "Done");
     public static string Add => T("Ajouter", "Add");
+    public static string TooWide => T("Trop large pour être lu en entier ici : agrandissez la fenêtre ou ouvrez-le en plein écran.",
+                                      "Too wide to be read in full here: widen the window or open it in full screen.");
     public static string SwitchToQr => T("Passer en QR code", "Switch to QR code");
     public static string FullScreen => T("Plein écran", "Full screen");
     public static string CopyTextTip => T("Cliquer pour copier le texte", "Click to copy the text");

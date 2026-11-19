@@ -81,6 +81,7 @@ Windows 10 (1809 et plus), 64 bits.
 | Plein écran | Double-clic sur une carte |
 | Taille des codes | Curseur de la barre d'outils |
 | Onglets | **Ctrl+T** nouveau, **Ctrl+W** fermer, **Ctrl+Tab** suivant, double-clic pour renommer |
+| Fenêtres | Glissez un onglet hors de la barre d'onglets pour l'ouvrir dans sa propre fenêtre, ou sur la barre d'une autre fenêtre pour l'y regrouper (aussi par clic droit sur l'onglet). Les fichiers `.codes` ouverts depuis l'Explorateur rejoignent la dernière fenêtre utilisée. |
 | Fichiers | **Ctrl+O** ouvrir, **Ctrl+S** enregistrer, **Ctrl+Maj+S** enregistrer sous |
 | Liste latérale | **Ctrl+L**, et glisser son bord pour la redimensionner |
 | Thème | Bouton Paramètres (roue dentée) en haut à droite, ou **Ctrl+,** : comme Windows, clair ou sombre |
@@ -138,7 +139,8 @@ Si le dossier du projet a un chemin très long, la publication peut dépasser la
 
 Les signalements de bugs et les suggestions sont bienvenus dans les
 [issues](https://github.com/ArbitroDev/BarcodeBoard/issues). Les pull requests sont acceptées
-dans le cadre défini par la licence (section 3).
+dans le cadre défini par la licence (section 3) : lisez d'abord le guide
+[CONTRIBUTING.md](CONTRIBUTING.md) (en anglais).
 
 ## Licence
 

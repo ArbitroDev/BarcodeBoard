@@ -32,6 +32,21 @@ public static class CodeRaster
         return new CodeLayout(barPx, barPx * matrix.Width, height);
     }
 
+    /// <summary>
+    /// Comme <see cref="Layout"/>, mais le code doit tenir en entier dans <paramref name="maxWidthPx"/> pixels physiques :
+    /// un code partiellement affiché ne se lit pas. Le module descend alors au plus grand nombre entier de pixels
+    /// qui tient, jusqu'à un pixel physique (toujours net). Null si même ainsi le code est trop large.
+    /// </summary>
+    public static CodeLayout? LayoutWithin(CodeMatrix matrix, double sizeDip, double dpiScale, int maxWidthPx)
+    {
+        var layout = Layout(matrix, sizeDip, dpiScale);
+        if (layout.WidthPx <= maxWidthPx) return layout;
+        int px = maxWidthPx / matrix.Width;
+        if (px < 1) return null;
+        // Code-barres : même hauteur, seules les barres s'affinent. QR code : reste carré.
+        return new CodeLayout(px, px * matrix.Width, matrix.Height > 1 ? px * matrix.Height : layout.HeightPx);
+    }
+
     /// <summary>Pixels en niveaux de gris 8 bits (0 noir, 255 blanc), une ligne = <c>WidthPx</c> octets.</summary>
     public static byte[] Render(CodeMatrix matrix, CodeLayout layout)
     {

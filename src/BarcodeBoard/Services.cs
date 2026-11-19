@@ -14,10 +14,12 @@ public static class CodeImages
     /// Image à afficher : un pixel du bitmap = un pixel physique de l'écran. Le DPI du bitmap est celui
     /// de l'écran, donc WPF l'affiche sans redimensionnement (Stretch=None, mise à l'échelle au plus proche).
     /// </summary>
-    public static BitmapSource ForScreen(CodeMatrix matrix, double sizeDip, double dpiScale)
+    /// <param name="maxWidthDip">Largeur disponible : un code plus large est affiné jusqu'à un pixel physique par
+    /// module ; s'il ne tient toujours pas, aucune image (un code coupé ne se lit pas).</param>
+    public static BitmapSource? ForScreen(CodeMatrix matrix, double sizeDip, double dpiScale, double maxWidthDip = double.PositiveInfinity)
     {
-        var layout = CodeRaster.Layout(matrix, sizeDip, dpiScale);
-        return Create(matrix, layout, 96 * dpiScale);
+        int maxPx = double.IsInfinity(maxWidthDip) ? int.MaxValue : (int)Math.Floor(maxWidthDip * dpiScale);
+        return CodeRaster.LayoutWithin(matrix, sizeDip, dpiScale, maxPx) is { } layout ? Create(matrix, layout, 96 * dpiScale) : null;
     }
 
     /// <summary>Même image que <see cref="ForScreen"/>, mais déclarée à 96 DPI pour le presse-papiers.</summary>
@@ -42,9 +44,9 @@ public static class CodeImages
             layout = CodeRaster.Layout(matrix, size, dpiScale);
         }
         // Code très long sur un écran mis à l'échelle : un module d'un pixel logique ne tient pas. On descend
-        // alors à un pixel physique (toujours entier, donc toujours net) plutôt que de rogner le code.
-        if (layout.WidthPx > maxW)
-            layout = CodeRaster.Layout(matrix, size * dpiScale, 1);
+        // alors jusqu'à un pixel physique (toujours entier, donc toujours net) plutôt que de rogner le code.
+        if (layout.WidthPx > maxW && CodeRaster.LayoutWithin(matrix, size, dpiScale, (int)maxW) is { } narrower)
+            layout = narrower;
         return Create(matrix, layout, 96 * dpiScale);
     }
 
@@ -98,6 +100,9 @@ public sealed class AppSettings
     /// <summary>Emplacement des réglages avant le changement de nom de l'application.</summary>
     private static string LegacyFilePath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "CodesEcran", "settings.json");
+
+    /// <summary>Réglages communs à toutes les fenêtres (thème, taille des codes…) : la dernière fermée enregistre.</summary>
+    public static AppSettings Current { get; } = Load();
 
     public static AppSettings Load()
     {
