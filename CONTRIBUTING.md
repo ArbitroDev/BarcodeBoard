@@ -35,7 +35,10 @@ it.
   requests (merge commits, so that `arbitro-dev` can then be brought up to date with `main`).
 - A version is released by pushing a `vX.Y.Z` tag on `main`, by the maintainer only: the release
   workflow builds, tests, creates the installer and the portable exe, and attaches them to a
-  GitHub release whose notes come from the pull request titles. Keep them meaningful.
+  GitHub release.
+- The release notes are written from the **commit titles** since the previous version, grouped by
+  type (new features, bug fixes…), by `.github/scripts/release_notes.sh`. Keep the titles
+  meaningful for users. Every pull request to `main` previews them in its **Release notes** check.
 - Run the release workflow by hand (**Run workflow**) to try it: it builds version `0.0.0` and
   publishes nothing.
 
