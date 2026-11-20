@@ -107,6 +107,7 @@ public partial class MainWindow : Window
     protected override void OnSourceInitialized(EventArgs e)
     {
         base.OnSourceInitialized(e);
+        HwndSource.FromHwnd(new WindowInteropHelper(this).Handle)?.AddHook(WndProc);
         _mica = !NoMicaRequested() && Backdrop.TryApply(this);
         if (_isFirst) RestorePlacement();
         if (_mica)
@@ -344,6 +345,15 @@ public partial class MainWindow : Window
             return;
         }
 
+        // Échap pendant un glisser d'onglet : l'onglet revient à sa place.
+        if (key == Key.Escape && StripPanel is { IsDragging: true })
+        {
+            CancelTabReorder();
+            Mouse.Capture(null);
+            e.Handled = true;
+            return;
+        }
+
         if (_vm.ScanMode && ctrl)
         {
             // Une douchette envoie les caractères de contrôle (GS du GS1-128…) en Ctrl+lettre : ils vont dans
@@ -477,15 +487,39 @@ public partial class MainWindow : Window
     {
         if (e.LeftButton != MouseButtonState.Pressed)
         {
+            EndTabReorder(_tabDragCandidate);
             _tabDragCandidate = null;
             if (sender is UIElement { IsMouseCaptured: true } element) element.ReleaseMouseCapture();
             return;
         }
-        if (_tabDragCandidate is not { } tab || tab.IsRenaming) return;
+        if (_tabDragCandidate is not { } tab || tab.IsRenaming || StripPanel is not { } panel) return;
+        var p = e.GetPosition(this);
         // L'onglet est arraché quand le pointeur quitte la bande d'onglets vers le haut ou le bas.
-        if (Math.Abs(e.GetPosition(this).Y - _tabDragStart.Y) < 18) return;
-        _tabDragCandidate = null;
-        TearOff(tab, _tabGrab);
+        if (Math.Abs(p.Y - _tabDragStart.Y) >= 18)
+        {
+            _tabDragCandidate = null;
+            panel.EndDrag(); // il quitte la bande : sa place dans la bande n'a plus d'importance
+            TearOff(tab, _tabGrab);
+            return;
+        }
+        // Sinon il glisse le long de la bande, et les autres onglets lui font de la place.
+        if (!panel.IsDragging)
+        {
+            if (Math.Abs(p.X - _tabDragStart.X) < SystemParameters.MinimumHorizontalDragDistance) return;
+            if (TabStrip.ItemContainerGenerator.ContainerFromItem(tab) is not UIElement container) return;
+            panel.BeginDrag(container);
+        }
+        panel.DragTo(e.GetPosition(panel).X - _tabGrab.X);
+    }
+
+    /// <summary>Onglet lâché après un glisser le long de la bande : il prend la place où il a été lâché.</summary>
+    private void EndTabReorder(TabViewModel? tab)
+    {
+        if (StripPanel is not { } panel) return;
+        int to = panel.EndDrag();
+        int from = tab is null ? -1 : _vm.Tabs.IndexOf(tab);
+        if (to < 0 || from < 0 || to == from) return;
+        _vm.Tabs.Move(from, to);
     }
 
     /// <summary>
@@ -514,11 +548,83 @@ public partial class MainWindow : Window
             moving.PlaceTabUnderPointer(tab, grab);
         }
 
-        moving.FollowPointerUntilRelease();
+        moving.FollowPointerUntilRelease(tab, grab);
 
+        var previewed = moving._mergeTarget;
+        moving._mergeTarget = null;
+        MainWindow? target = null;
+        if (Native.GetCursorPos(out var pt)) target = TabBarUnder(pt, moving);
+        if (previewed is not null && previewed != target) previewed.StripPanel?.HideIncoming();
+        if (target is null)
+        {
+            moving.SetTranslucent(false);
+            return;
+        }
+        // Fusion : la fenêtre tenue disparaît tout de suite (elle se ferme une fois vidée), sans redevenir opaque.
+        moving.Hide();
+        moving.SetTranslucent(false);
+        target.TakeTab(moving, tab, pt);
+    }
+
+    /// <summary>Fenêtre de l'application dont la barre d'onglets est sous ce point ; la plus en avant si plusieurs.</summary>
+    private static MainWindow? TabBarUnder(Native.POINT pt, MainWindow except)
+    {
+        var candidates = AppWindows.All.Where(w => w != except && w.IsOverTabBar(pt)).ToList();
+        if (candidates.Count <= 1) return candidates.FirstOrDefault();
+        // Parcours des fenêtres de l'écran de la plus en avant à la plus en arrière.
+        for (var h = Native.GetTopWindow(IntPtr.Zero); h != IntPtr.Zero; h = Native.GetWindow(h, Native.GW_HWNDNEXT))
+            if (candidates.FirstOrDefault(w => new WindowInteropHelper(w).Handle == h) is { } front) return front;
+        return candidates[0];
+    }
+
+    // ---- Aperçu de la fusion pendant que la fenêtre suit le pointeur ----
+
+    private bool _followingPointer;
+    private MainWindow? _mergeTarget;
+
+    private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+    {
+        if (msg != Native.WM_MOVING || !_followingPointer) return IntPtr.Zero;
+        UpdateMergePreview();
+        if (!KeepTabUnderPointer(lParam)) return IntPtr.Zero;
+        handled = true;
+        return new IntPtr(1);
+    }
+
+    /// <summary>
+    /// Fenêtre au-dessus de la barre d'onglets d'une autre : celle-ci ouvre une place à l'endroit du pointeur et
+    /// la fenêtre tenue devient translucide, comme dans l'Explorateur, pour montrer que l'onglet va y entrer.
+    /// </summary>
+    private void UpdateMergePreview()
+    {
         if (!Native.GetCursorPos(out var pt)) return;
-        var target = AppWindows.All.FirstOrDefault(w => w != moving && w.IsOverTabBar(pt));
-        target?.TakeTab(moving, tab, pt);
+        var target = TabBarUnder(pt, this);
+        if (target != _mergeTarget)
+        {
+            _mergeTarget?.StripPanel?.HideIncoming();
+            _mergeTarget = target;
+            SetTranslucent(target is not null);
+        }
+        if (target?.StripPanel is { } panel) panel.ShowIncoming(panel.PointFromScreen(new Point(pt.X, pt.Y)).X);
+    }
+
+    private void SetTranslucent(bool on)
+    {
+        var hwnd = new WindowInteropHelper(this).Handle;
+        long style = Native.GetWindowLongPtr(hwnd, Native.GWL_EXSTYLE).ToInt64();
+        if (on)
+        {
+            Native.SetWindowLongPtr(hwnd, Native.GWL_EXSTYLE, new IntPtr(style | Native.WS_EX_LAYERED));
+            Native.SetLayeredWindowAttributes(hwnd, 0, 110, Native.LWA_ALPHA);
+        }
+        else if ((style & Native.WS_EX_LAYERED) != 0)
+        {
+            Native.SetWindowLongPtr(hwnd, Native.GWL_EXSTYLE, new IntPtr(style & ~Native.WS_EX_LAYERED));
+            // Windows demande de redessiner la fenêtre une fois le style retiré, sinon elle peut rester un instant
+            // noire ou figée.
+            Native.RedrawWindow(hwnd, IntPtr.Zero, IntPtr.Zero,
+                Native.RDW_ERASE | Native.RDW_INVALIDATE | Native.RDW_FRAME | Native.RDW_ALLCHILDREN);
+        }
     }
 
     private Point PointToScreenDip(Point p)
@@ -531,24 +637,65 @@ public partial class MainWindow : Window
     /// <summary>Place la fenêtre pour que son onglet soit sous le pointeur, au point où il a été saisi.</summary>
     private void PlaceTabUnderPointer(TabViewModel tab, Point grab)
     {
-        var hwnd = new WindowInteropHelper(this).Handle;
-        if (TabStrip.ItemContainerGenerator.ContainerFromItem(tab) is not FrameworkElement header
-            || !Native.GetCursorPos(out var pt) || !Native.GetWindowRect(hwnd, out var win) || !Native.GetClientScreenRect(hwnd, out var client))
-            return;
-        var origin = header.TranslatePoint(new Point(grab.X, grab.Y), this);
-        double s = _vm.DpiScale;
-        int x = pt.X - (client.Left - win.Left) - (int)Math.Round(origin.X * s);
-        int y = pt.Y - (client.Top - win.Top) - (int)Math.Round(origin.Y * s);
-        Native.SetWindowPos(hwnd, IntPtr.Zero, x, y, 0, 0, Native.SWP_NOSIZE | Native.SWP_NOZORDER);
+        if (Native.GetCursorPos(out var pt)) PlaceTabAt(tab, grab, pt);
     }
 
-    /// <summary>Déplacement de fenêtre de Windows, comme en tirant la barre de titre ; rend la main au relâchement.</summary>
-    private void FollowPointerUntilRelease()
+    /// <summary>Déplace la fenêtre pour que le point saisi de l'onglet tombe sur ce point de l'écran (pixels physiques).</summary>
+    private void PlaceTabAt(TabViewModel tab, Point grab, Native.POINT pt)
+    {
+        var hwnd = new WindowInteropHelper(this).Handle;
+        if (GrabOffset(tab, grab) is not { } offset) return;
+        Native.SetWindowPos(hwnd, IntPtr.Zero, pt.X - offset.X, pt.Y - offset.Y, 0, 0, Native.SWP_NOSIZE | Native.SWP_NOZORDER);
+    }
+
+    /// <summary>
+    /// Écart, en pixels physiques, entre le coin de la fenêtre et le point saisi de l'onglet. Lu à l'écran : il
+    /// tient compte de l'échelle et des bordures, même pour une fenêtre qui vient d'être créée.
+    /// </summary>
+    private Native.POINT? GrabOffset(TabViewModel tab, Point grab)
+    {
+        var hwnd = new WindowInteropHelper(this).Handle;
+        if (TabStrip.ItemContainerGenerator.ContainerFromItem(tab) is not FrameworkElement header
+            || !Native.GetWindowRect(hwnd, out var win))
+            return null;
+        var current = header.PointToScreen(grab);
+        return new Native.POINT { X = (int)Math.Round(current.X) - win.Left, Y = (int)Math.Round(current.Y) - win.Top };
+    }
+
+    private Native.POINT? _followOffset;
+
+    /// <summary>
+    /// Déplacement de fenêtre de Windows, comme en tirant la barre de titre ; rend la main au relâchement.
+    /// La fenêtre est recalée à chaque mouvement pour que le point saisi de l'onglet reste sous le pointeur :
+    /// sinon Windows garde l'écart du début du déplacement, faussé quand le pointeur a bougé pendant que la
+    /// nouvelle fenêtre se créait.
+    /// </summary>
+    private void FollowPointerUntilRelease(TabViewModel tab, Point grab)
     {
         var hwnd = new WindowInteropHelper(this).Handle;
         Mouse.Capture(null);
         Native.ReleaseCapture();
-        Native.SendMessage(hwnd, Native.WM_NCLBUTTONDOWN, Native.HTCAPTION, IntPtr.Zero);
+        // Fenêtre agrandie : Windows la restaure en début de déplacement et la place lui-même sous le pointeur.
+        _followOffset = WindowState == WindowState.Normal ? GrabOffset(tab, grab) : null;
+        _followingPointer = true;
+        Native.GetCursorPos(out var pt);
+        var at = new IntPtr(((pt.Y & 0xFFFF) << 16) | (pt.X & 0xFFFF)); // position du pointeur, comme un vrai clic
+        try { Native.SendMessage(hwnd, Native.WM_NCLBUTTONDOWN, Native.HTCAPTION, at); }
+        finally { _followingPointer = false; _followOffset = null; }
+    }
+
+    /// <summary>Fenêtre proposée par Windows pendant le déplacement : recalée sous le pointeur.</summary>
+    private bool KeepTabUnderPointer(IntPtr rectPtr)
+    {
+        if (_followOffset is not { } offset || !Native.GetCursorPos(out var pt)) return false;
+        var rect = Marshal.PtrToStructure<Native.RECT>(rectPtr);
+        int width = rect.Right - rect.Left, height = rect.Bottom - rect.Top;
+        rect.Left = pt.X - offset.X;
+        rect.Top = pt.Y - offset.Y;
+        rect.Right = rect.Left + width;
+        rect.Bottom = rect.Top + height;
+        Marshal.StructureToPtr(rect, rectPtr, false);
+        return true;
     }
 
     /// <summary>Vrai si ce point de l'écran (pixels physiques) est sur la barre d'onglets de cette fenêtre.</summary>
@@ -563,12 +710,12 @@ public partial class MainWindow : Window
     /// <summary>Accueille l'onglet lâché sur la barre d'onglets, à l'endroit du pointeur ; la fenêtre d'origine vidée se ferme.</summary>
     private void TakeTab(MainWindow source, TabViewModel tab, Native.POINT pt)
     {
-        var local = TabStrip.PointFromScreen(new Point(pt.X, pt.Y));
+        // La place ouverte pendant l'aperçu, sinon celle sous le pointeur.
         int index = _vm.Tabs.Count;
-        for (int i = 0; i < _vm.Tabs.Count; i++)
+        if (StripPanel is { } panel)
         {
-            if (TabStrip.ItemContainerGenerator.ContainerFromIndex(i) is not FrameworkElement c) continue;
-            if (local.X < c.TranslatePoint(new Point(c.ActualWidth / 2, 0), TabStrip).X) { index = i; break; }
+            index = panel.IncomingIndex >= 0 ? panel.IncomingIndex : panel.InsertionIndex(panel.PointFromScreen(new Point(pt.X, pt.Y)).X);
+            panel.HideIncoming();
         }
         MoveTab(source, tab, this, index);
     }
@@ -684,10 +831,29 @@ public partial class MainWindow : Window
 
     private void Tab_MouseUp(object sender, MouseButtonEventArgs e)
     {
-        _tabDragCandidate = null;
-        if (sender is UIElement { IsMouseCaptured: true } element) element.ReleaseMouseCapture();
-        if (e.ChangedButton == MouseButton.Middle && ((FrameworkElement)sender).DataContext is TabViewModel tab)
+        if (e.ChangedButton == MouseButton.Left)
+        {
+            EndTabReorder(_tabDragCandidate);
+            _tabDragCandidate = null;
+            if (sender is UIElement { IsMouseCaptured: true } element) element.ReleaseMouseCapture();
+        }
+        // Clic du milieu : ferme l'onglet, sauf en plein glisser (un autre bouton ne doit pas l'interrompre).
+        else if (e.ChangedButton == MouseButton.Middle && _tabDragCandidate is null
+                 && ((FrameworkElement)sender).DataContext is TabViewModel tab)
             CloseTab(tab);
+    }
+
+    /// <summary>Souris perdue en plein glisser (changement de fenêtre…) : le glisser est annulé, l'onglet reste où il était.</summary>
+    private void Tab_LostMouseCapture(object sender, MouseEventArgs e)
+    {
+        if (e.OriginalSource != sender) return; // perte de souris d'un élément de l'onglet (zone de renommage…)
+        CancelTabReorder();
+    }
+
+    private void CancelTabReorder()
+    {
+        StripPanel?.EndDrag();
+        _tabDragCandidate = null;
     }
 
     private void CloseTab_Click(object sender, RoutedEventArgs e)
@@ -942,15 +1108,11 @@ public partial class MainWindow : Window
 
     private void Copy_Click(object sender, RoutedEventArgs e)
     {
-        if (Item(sender) is not { } item) return;
-        if (item.Matrix is null)
-        {
-            ShowToast(Loc.NoImage(item.ErrorMessage));
-            return;
-        }
+        // Le bouton est désactivé pour un code en erreur : il n'a pas d'image.
+        if (Item(sender) is not { Matrix: { } matrix }) return;
         try
         {
-            CodeImages.CopyToClipboard(CodeImages.ForClipboard(item.Matrix, _vm.CodeSize, _vm.DpiScale));
+            CodeImages.CopyToClipboard(CodeImages.ForClipboard(matrix, _vm.CodeSize, _vm.DpiScale));
             ShowToast(Loc.ImageCopied);
         }
         catch (ExternalException)
@@ -1091,6 +1253,7 @@ public partial class MainWindow : Window
 
     private void OpenFull(CodeItemViewModel item)
     {
+        if (item.HasError) return; // pas de code à montrer en grand (un code trop large pour sa carte, lui, peut l'être)
         _fullItem = item;
         FullView.Visibility = Visibility.Visible;
         RenderFull();
@@ -1104,9 +1267,13 @@ public partial class MainWindow : Window
         if (!codes.Contains(_fullItem)) { CloseFull(); return; }
 
         double maxW = Math.Max(100, Root.ActualWidth * 0.92), maxH = Math.Max(100, Root.ActualHeight - 200);
-        FullImage.Source = _fullItem.Matrix is null ? null : CodeImages.Fit(_fullItem.Matrix, maxW, maxH, _vm.DpiScale);
-        FullText.Text = _fullItem.HasError ? $"{_fullItem.Text}\n{_fullItem.ErrorMessage}" : _fullItem.Text;
-        FullCounter.Text = Loc.Counter(codes.IndexOf(_fullItem) + 1, codes.Count);
+        // Le plein écran ne reçoit jamais un code en erreur (OpenFull, StepFull) : il a toujours une matrice.
+        FullImage.Source = CodeImages.Fit(_fullItem.Matrix!, maxW, maxH, _vm.DpiScale);
+        FullText.Text = FullImage.Source is null ? $"{_fullItem.Text}\n{Loc.TooWideFull}" : _fullItem.Text;
+        // Seuls les codes sans erreur comptent : ce sont les seuls que les flèches font défiler.
+        var shown = codes.Where(c => !c.HasError).ToList();
+        FullCounter.Text = Loc.Counter(shown.IndexOf(_fullItem) + 1, shown.Count);
+        FullPrevButton.IsEnabled = FullNextButton.IsEnabled = shown.Count > 1;
     }
 
     private void StepFull(int delta)
@@ -1114,7 +1281,15 @@ public partial class MainWindow : Window
         if (_fullItem is null) return;
         var codes = _fullItem.Owner.Codes;
         if (codes.Count == 0) { CloseFull(); return; }
-        _fullItem = codes[Cyclic.Wrap(codes.IndexOf(_fullItem) + delta, codes.Count)];
+        // Les codes en erreur sont sautés ; s'il n'y en a pas d'autre, on reste sur place.
+        int index = codes.IndexOf(_fullItem);
+        for (int step = 1; step <= codes.Count; step++)
+        {
+            var next = codes[Cyclic.Wrap(index + step * delta, codes.Count)];
+            if (next.HasError) continue;
+            _fullItem = next;
+            break;
+        }
         RenderFull();
     }
 
@@ -1244,6 +1419,18 @@ internal static class Native
     [DllImport("user32.dll")] public static extern bool GetCursorPos(out POINT point);
     [DllImport("user32.dll")] public static extern bool ReleaseCapture();
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern IntPtr SendMessage(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam);
-    public const int WM_NCLBUTTONDOWN = 0x00A1;
+    public const int WM_NCLBUTTONDOWN = 0x00A1, WM_MOVING = 0x0216;
     public static readonly IntPtr HTCAPTION = 2;
+
+    public const int GWL_EXSTYLE = -20, WS_EX_LAYERED = 0x80000;
+    public const uint LWA_ALPHA = 0x2;
+    [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW")] public static extern IntPtr GetWindowLongPtr(IntPtr hwnd, int index);
+    [DllImport("user32.dll", EntryPoint = "SetWindowLongPtrW")] public static extern IntPtr SetWindowLongPtr(IntPtr hwnd, int index, IntPtr value);
+    [DllImport("user32.dll")] public static extern bool SetLayeredWindowAttributes(IntPtr hwnd, uint colorKey, byte alpha, uint flags);
+    public const uint RDW_INVALIDATE = 0x1, RDW_ERASE = 0x4, RDW_ALLCHILDREN = 0x80, RDW_FRAME = 0x400;
+    [DllImport("user32.dll")] public static extern bool RedrawWindow(IntPtr hwnd, IntPtr rect, IntPtr region, uint flags);
+
+    public const uint GW_HWNDNEXT = 2;
+    [DllImport("user32.dll")] public static extern IntPtr GetTopWindow(IntPtr hwnd);
+    [DllImport("user32.dll")] public static extern IntPtr GetWindow(IntPtr hwnd, uint cmd);
 }

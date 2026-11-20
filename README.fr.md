@@ -80,7 +80,7 @@ Windows 10 (1809 et plus), 64 bits.
 | Mode scan | **F6** ou bouton Mode scan ; flèches pour changer de code, **Échap** pour quitter |
 | Plein écran | Double-clic sur une carte |
 | Taille des codes | Curseur de la barre d'outils |
-| Onglets | **Ctrl+T** nouveau, **Ctrl+W** fermer, **Ctrl+Tab** suivant, double-clic pour renommer |
+| Onglets | **Ctrl+T** nouveau, **Ctrl+W** fermer, **Ctrl+Tab** suivant, double-clic pour renommer, glisser le long de la barre pour réorganiser |
 | Fenêtres | Glissez un onglet hors de la barre d'onglets pour l'ouvrir dans sa propre fenêtre, ou sur la barre d'une autre fenêtre pour l'y regrouper (aussi par clic droit sur l'onglet). Les fichiers `.codes` ouverts depuis l'Explorateur rejoignent la dernière fenêtre utilisée. |
 | Fichiers | **Ctrl+O** ouvrir, **Ctrl+S** enregistrer, **Ctrl+Maj+S** enregistrer sous |
 | Liste latérale | **Ctrl+L**, et glisser son bord pour la redimensionner |

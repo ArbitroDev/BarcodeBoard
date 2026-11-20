@@ -79,7 +79,7 @@ Requirements: Windows 11 (recommended, the app is designed and tuned for it) or 
 | Scan mode | **F6** or the Scan mode button; arrow keys to change code, **Esc** to exit |
 | Full screen | Double-click a card |
 | Code size | Toolbar slider |
-| Tabs | **Ctrl+T** new, **Ctrl+W** close, **Ctrl+Tab** next, double-click to rename |
+| Tabs | **Ctrl+T** new, **Ctrl+W** close, **Ctrl+Tab** next, double-click to rename, drag along the tab bar to reorder |
 | Windows | Drag a tab out of the tab bar to open it in its own window, or onto another window's tab bar to move it there (also from the tab's right-click menu). `.codes` files opened from File Explorer join the last window used. |
 | Files | **Ctrl+O** open, **Ctrl+S** save, **Ctrl+Shift+S** save as |
 | Side list | **Ctrl+L**, and drag its edge to resize it |

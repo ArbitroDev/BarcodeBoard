@@ -1,4 +1,4 @@
-; Installeur Windows de Barcode Board (Inno Setup 6).
+﻿; Installeur Windows de Barcode Board (Inno Setup 6).
 ; Nom affiché selon la langue de l'installation : « Tableau de code-barres » en français, « Barcode Board »
 ; en anglais. Le dossier d'installation, l'exe et l'association des fichiers gardent le nom technique.
 ; Installation par utilisateur, sans droits administrateur.
@@ -10,6 +10,12 @@
 #define AppExe "BarcodeBoard.exe"
 #ifndef AppVersion
   #define AppVersion "1.0.0"
+#endif
+
+; Page de licence : LICENSE.md mis en forme (RTF), plus lisible que le Markdown brut dans la fenêtre de l'installeur
+#define LicenseRtf SourcePath + "obj\License.rtf"
+#if Exec(GetEnv("SystemRoot") + "\System32\WindowsPowerShell\v1.0\powershell.exe", "-NoProfile -ExecutionPolicy Bypass -File """ + SourcePath + "license-rtf.ps1"" """ + SourcePath + "..\LICENSE.md"" """ + LicenseRtf + """", SourcePath, 1, SW_HIDE) != 0
+  #error LICENSE.md could not be converted for the license page
 #endif
 
 [Setup]
@@ -34,7 +40,7 @@ OutputBaseFilename=BarcodeBoard-Setup-{#AppVersion}
 SetupIconFile=..\src\BarcodeBoard\Assets\BarcodeBoard.ico
 UninstallDisplayIcon={app}\{#AppExe}
 UninstallDisplayName={cm:AppName}
-LicenseFile=..\LICENSE.md
+LicenseFile={#LicenseRtf}
 Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
@@ -52,6 +58,8 @@ french.AssociateCodes=Ouvrir les fichiers .codes avec Tableau de code-barres
 english.AssociateCodes=Open .codes files with Barcode Board
 french.CodesFileType=Onglet de codes (Tableau de code-barres)
 english.CodesFileType=Barcode Board tab
+french.NewerInstalled=La version %1 de Tableau de code-barres, plus récente que celle-ci (%2), est déjà installée.%n%nPour revenir à une version antérieure, désinstallez d'abord la version installée.
+english.NewerInstalled=Barcode Board %1, newer than this version (%2), is already installed.%n%nTo go back to an older version, uninstall the installed version first.
 
 [Tasks]
 Name: "associate"; Description: "{cm:AssociateCodes}"
@@ -75,3 +83,63 @@ Root: HKA; Subkey: "Software\Classes\BarcodeBoard.codes\shell\open\command"; Val
 
 [Run]
 Filename: "{app}\{#AppExe}"; Description: "{cm:LaunchProgram,{cm:AppName}}"; Flags: nowait postinstall skipifsilent
+
+[Code]
+// Mise à jour : même AppId, donc même dossier, mêmes tâches, et l'application ouverte est fermée puis relancée.
+// Une version plus récente déjà installée n'est en revanche jamais remplacée par une plus ancienne.
+const
+  UninstallKey = 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{1B6750FA-7100-4E8E-A760-6DB9EBEC5C8B}_is1';
+
+// Retire d'une version sa partie de préversion (« 1.2.0-rc.1 » → « 1.2.0 ») ; vrai s'il y en avait une.
+function StripPrerelease(var Version: String): Boolean;
+begin
+  Result := Pos('-', Version) > 0;
+  if Result then Version := Copy(Version, 1, Pos('-', Version) - 1);
+end;
+
+// Compare deux versions « 1.2.3 » nombre par nombre : > 0 si A est plus récente que B.
+// À numéros égaux, une préversion (« 1.2.0-rc.1 ») est plus ancienne que la version finale (« 1.2.0 »).
+function CompareVersions(A, B: String): Integer;
+var
+  PartA, PartB: Integer;
+  PreA, PreB: Boolean;
+begin
+  PreA := StripPrerelease(A);
+  PreB := StripPrerelease(B);
+  Result := 0;
+  while (Result = 0) and ((A <> '') or (B <> '')) do
+  begin
+    if Pos('.', A) > 0 then begin PartA := StrToIntDef(Copy(A, 1, Pos('.', A) - 1), 0); Delete(A, 1, Pos('.', A)); end
+    else begin PartA := StrToIntDef(A, 0); A := ''; end;
+    if Pos('.', B) > 0 then begin PartB := StrToIntDef(Copy(B, 1, Pos('.', B) - 1), 0); Delete(B, 1, Pos('.', B)); end
+    else begin PartB := StrToIntDef(B, 0); B := ''; end;
+    if PartA > PartB then Result := 1
+    else if PartA < PartB then Result := -1;
+  end;
+  if (Result = 0) and PreA and not PreB then Result := -1
+  else if (Result = 0) and PreB and not PreA then Result := 1;
+end;
+
+// Version installée la plus récente, pour l'utilisateur ou pour tout l'ordinateur ; vide si aucune.
+function InstalledVersion(): String;
+var
+  Version: String;
+begin
+  Result := '';
+  if RegQueryStringValue(HKCU, UninstallKey, 'DisplayVersion', Version) and (CompareVersions(Version, Result) > 0) then Result := Version;
+  if RegQueryStringValue(HKLM32, UninstallKey, 'DisplayVersion', Version) and (CompareVersions(Version, Result) > 0) then Result := Version;
+  if RegQueryStringValue(HKLM64, UninstallKey, 'DisplayVersion', Version) and (CompareVersions(Version, Result) > 0) then Result := Version;
+end;
+
+function InitializeSetup(): Boolean;
+var
+  Installed: String;
+begin
+  Result := True;
+  Installed := InstalledVersion();
+  if (Installed <> '') and (CompareVersions(Installed, '{#AppVersion}') > 0) then
+  begin
+    SuppressibleMsgBox(FmtMessage(CustomMessage('NewerInstalled'), [Installed, '{#AppVersion}']), mbError, MB_OK, IDOK);
+    Result := False;
+  end;
+end;

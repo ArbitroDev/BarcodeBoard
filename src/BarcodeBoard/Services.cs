@@ -29,8 +29,11 @@ public static class CodeImages
         return Create(matrix, layout, 96);
     }
 
-    /// <summary>Plus grande image qui tient dans la zone donnée (en pixels logiques), pour le plein écran.</summary>
-    public static BitmapSource Fit(CodeMatrix matrix, double maxWidthDip, double maxHeightDip, double dpiScale)
+    /// <summary>
+    /// Plus grande image qui tient dans la zone donnée (en pixels logiques), pour le plein écran ;
+    /// null si le code n'y tient pas même à un pixel par module (jamais un code coupé).
+    /// </summary>
+    public static BitmapSource? Fit(CodeMatrix matrix, double maxWidthDip, double maxHeightDip, double dpiScale)
     {
         bool qr = matrix.Height > 1;
         double size = qr
@@ -45,8 +48,11 @@ public static class CodeImages
         }
         // Code très long sur un écran mis à l'échelle : un module d'un pixel logique ne tient pas. On descend
         // alors jusqu'à un pixel physique (toujours entier, donc toujours net) plutôt que de rogner le code.
-        if (layout.WidthPx > maxW && CodeRaster.LayoutWithin(matrix, size, dpiScale, (int)maxW) is { } narrower)
+        if (layout.WidthPx > maxW)
+        {
+            if (CodeRaster.LayoutWithin(matrix, size, dpiScale, (int)maxW) is not { } narrower) return null;
             layout = narrower;
+        }
         return Create(matrix, layout, 96 * dpiScale);
     }
 
