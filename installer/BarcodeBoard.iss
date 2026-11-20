@@ -1,4 +1,4 @@
-; Installeur Windows de Barcode Board (Inno Setup 6).
+﻿; Installeur Windows de Barcode Board (Inno Setup 6).
 ; Nom affiché selon la langue de l'installation : « Tableau de code-barres » en français, « Barcode Board »
 ; en anglais. Le dossier d'installation, l'exe et l'association des fichiers gardent le nom technique.
 ; Installation par utilisateur, sans droits administrateur.
@@ -10,6 +10,12 @@
 #define AppExe "BarcodeBoard.exe"
 #ifndef AppVersion
   #define AppVersion "1.0.0"
+#endif
+
+; Page de licence : LICENSE.md mis en forme (RTF), plus lisible que le Markdown brut dans la fenêtre de l'installeur
+#define LicenseRtf SourcePath + "obj\License.rtf"
+#if Exec(GetEnv("SystemRoot") + "\System32\WindowsPowerShell\v1.0\powershell.exe", "-NoProfile -ExecutionPolicy Bypass -File """ + SourcePath + "license-rtf.ps1"" """ + SourcePath + "..\LICENSE.md"" """ + LicenseRtf + """", SourcePath, 1, SW_HIDE) != 0
+  #error LICENSE.md could not be converted for the license page
 #endif
 
 [Setup]
@@ -34,7 +40,7 @@ OutputBaseFilename=BarcodeBoard-Setup-{#AppVersion}
 SetupIconFile=..\src\BarcodeBoard\Assets\BarcodeBoard.ico
 UninstallDisplayIcon={app}\{#AppExe}
 UninstallDisplayName={cm:AppName}
-LicenseFile=..\LICENSE.md
+LicenseFile={#LicenseRtf}
 Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
