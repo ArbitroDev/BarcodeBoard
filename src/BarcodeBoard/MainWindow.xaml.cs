@@ -107,6 +107,7 @@ public partial class MainWindow : Window
     protected override void OnSourceInitialized(EventArgs e)
     {
         base.OnSourceInitialized(e);
+        HwndSource.FromHwnd(new WindowInteropHelper(this).Handle)?.AddHook(WndProc);
         _mica = !NoMicaRequested() && Backdrop.TryApply(this);
         if (_isFirst) RestorePlacement();
         if (_mica)
@@ -540,9 +541,61 @@ public partial class MainWindow : Window
 
         moving.FollowPointerUntilRelease();
 
-        if (!Native.GetCursorPos(out var pt)) return;
+        var previewed = moving.EndMergePreview();
+        if (!Native.GetCursorPos(out var pt)) { previewed?.StripPanel?.HideIncoming(); return; }
         var target = AppWindows.All.FirstOrDefault(w => w != moving && w.IsOverTabBar(pt));
+        if (previewed is not null && previewed != target) previewed.StripPanel?.HideIncoming();
         target?.TakeTab(moving, tab, pt);
+    }
+
+    // ---- Aperçu de la fusion pendant que la fenêtre suit le pointeur ----
+
+    private bool _followingPointer;
+    private MainWindow? _mergeTarget;
+
+    private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+    {
+        if (msg == Native.WM_MOVING && _followingPointer) UpdateMergePreview();
+        return IntPtr.Zero;
+    }
+
+    /// <summary>
+    /// Fenêtre au-dessus de la barre d'onglets d'une autre : celle-ci ouvre une place à l'endroit du pointeur et
+    /// la fenêtre tenue devient translucide, comme dans l'Explorateur, pour montrer que l'onglet va y entrer.
+    /// </summary>
+    private void UpdateMergePreview()
+    {
+        if (!Native.GetCursorPos(out var pt)) return;
+        var target = AppWindows.All.FirstOrDefault(w => w != this && w.IsOverTabBar(pt));
+        if (target != _mergeTarget)
+        {
+            _mergeTarget?.StripPanel?.HideIncoming();
+            _mergeTarget = target;
+            SetTranslucent(target is not null);
+        }
+        if (target?.StripPanel is { } panel) panel.ShowIncoming(panel.PointFromScreen(new Point(pt.X, pt.Y)).X);
+    }
+
+    /// <summary>Fin du déplacement : rend la fenêtre opaque, referme la place ouverte et rend la fenêtre visée.</summary>
+    private MainWindow? EndMergePreview()
+    {
+        var target = _mergeTarget;
+        _mergeTarget = null;
+        SetTranslucent(false);
+        return target;
+    }
+
+    private void SetTranslucent(bool on)
+    {
+        var hwnd = new WindowInteropHelper(this).Handle;
+        long style = Native.GetWindowLongPtr(hwnd, Native.GWL_EXSTYLE).ToInt64();
+        if (on)
+        {
+            Native.SetWindowLongPtr(hwnd, Native.GWL_EXSTYLE, new IntPtr(style | Native.WS_EX_LAYERED));
+            Native.SetLayeredWindowAttributes(hwnd, 0, 110, Native.LWA_ALPHA);
+        }
+        else if ((style & Native.WS_EX_LAYERED) != 0)
+            Native.SetWindowLongPtr(hwnd, Native.GWL_EXSTYLE, new IntPtr(style & ~Native.WS_EX_LAYERED));
     }
 
     private Point PointToScreenDip(Point p)
@@ -572,7 +625,9 @@ public partial class MainWindow : Window
         var hwnd = new WindowInteropHelper(this).Handle;
         Mouse.Capture(null);
         Native.ReleaseCapture();
-        Native.SendMessage(hwnd, Native.WM_NCLBUTTONDOWN, Native.HTCAPTION, IntPtr.Zero);
+        _followingPointer = true;
+        try { Native.SendMessage(hwnd, Native.WM_NCLBUTTONDOWN, Native.HTCAPTION, IntPtr.Zero); }
+        finally { _followingPointer = false; }
     }
 
     /// <summary>Vrai si ce point de l'écran (pixels physiques) est sur la barre d'onglets de cette fenêtre.</summary>
@@ -587,12 +642,12 @@ public partial class MainWindow : Window
     /// <summary>Accueille l'onglet lâché sur la barre d'onglets, à l'endroit du pointeur ; la fenêtre d'origine vidée se ferme.</summary>
     private void TakeTab(MainWindow source, TabViewModel tab, Native.POINT pt)
     {
-        var local = TabStrip.PointFromScreen(new Point(pt.X, pt.Y));
+        // La place ouverte pendant l'aperçu, sinon celle sous le pointeur.
         int index = _vm.Tabs.Count;
-        for (int i = 0; i < _vm.Tabs.Count; i++)
+        if (StripPanel is { } panel)
         {
-            if (TabStrip.ItemContainerGenerator.ContainerFromIndex(i) is not FrameworkElement c) continue;
-            if (local.X < c.TranslatePoint(new Point(c.ActualWidth / 2, 0), TabStrip).X) { index = i; break; }
+            index = panel.IncomingIndex >= 0 ? panel.IncomingIndex : panel.InsertionIndex(panel.PointFromScreen(new Point(pt.X, pt.Y)).X);
+            panel.HideIncoming();
         }
         MoveTab(source, tab, this, index);
     }
@@ -1288,6 +1343,12 @@ internal static class Native
     [DllImport("user32.dll")] public static extern bool GetCursorPos(out POINT point);
     [DllImport("user32.dll")] public static extern bool ReleaseCapture();
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern IntPtr SendMessage(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam);
-    public const int WM_NCLBUTTONDOWN = 0x00A1;
+    public const int WM_NCLBUTTONDOWN = 0x00A1, WM_MOVING = 0x0216;
     public static readonly IntPtr HTCAPTION = 2;
+
+    public const int GWL_EXSTYLE = -20, WS_EX_LAYERED = 0x80000;
+    public const uint LWA_ALPHA = 0x2;
+    [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW")] public static extern IntPtr GetWindowLongPtr(IntPtr hwnd, int index);
+    [DllImport("user32.dll", EntryPoint = "SetWindowLongPtrW")] public static extern IntPtr SetWindowLongPtr(IntPtr hwnd, int index, IntPtr value);
+    [DllImport("user32.dll")] public static extern bool SetLayeredWindowAttributes(IntPtr hwnd, uint colorKey, byte alpha, uint flags);
 }

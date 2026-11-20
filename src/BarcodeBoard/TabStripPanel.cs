@@ -34,9 +34,12 @@ public sealed class TabStripPanel : Panel
     public bool IsOverflowing { get; private set; }
     public event EventHandler? OverflowChanged;
 
+    /// <summary>Nombre de places : les onglets, plus celle réservée à un onglet venu d'une autre fenêtre.</summary>
+    private int Slots => InternalChildren.Count + (_incoming >= 0 ? 1 : 0);
+
     protected override Size MeasureOverride(Size available)
     {
-        int n = InternalChildren.Count;
+        int n = Slots;
         double room = double.IsInfinity(available.Width) ? n * (MaxTab + Gap) : Math.Max(0, available.Width - Reserve);
         _tabWidth = n == 0 ? 0 : Math.Clamp(room / n - Gap, MinTab, MaxTab);
 
@@ -61,7 +64,7 @@ public sealed class TabStripPanel : Panel
     {
         int n = InternalChildren.Count;
         double step = _tabWidth + Gap;
-        double maxOffset = Math.Max(0, n * step - final.Width);
+        double maxOffset = Math.Max(0, Slots * step - final.Width);
 
         if (_revealSelected && _dragged is null)
         {
@@ -78,9 +81,10 @@ public sealed class TabStripPanel : Panel
         }
         _offset = Math.Clamp(_offset, 0, maxOffset);
 
-        // Pendant un glisser, l'onglet tiré suit le pointeur et les autres lui laissent la place où il tomberait.
+        // Pendant un glisser, l'onglet tiré suit le pointeur et les autres lui laissent la place où il tomberait ;
+        // de même pour un onglet d'une autre fenêtre tenu au-dessus de la bande.
         int from = _dragged is null ? -1 : InternalChildren.IndexOf(_dragged);
-        int target = from < 0 ? -1 : DropIndex();
+        int target = from >= 0 ? DropIndex() : _incoming;
 
         bool animate = _animateNext && SystemParameters.ClientAreaAnimation;
         _animateNext = false;
@@ -141,6 +145,53 @@ public sealed class TabStripPanel : Panel
     {
         base.OnVisualChildrenChanged(added, removed);
         _animateNext = true;
+    }
+
+    // ---- Onglet d'une autre fenêtre tenu au-dessus de la bande ----
+
+    private int _incoming = -1;
+
+    /// <summary>Place où entrerait un onglet lâché à cette abscisse (repère de la bande).</summary>
+    public int InsertionIndex(double x)
+    {
+        double step = _tabWidth + Gap;
+        int n = InternalChildren.Count;
+        // Par place et non par onglet : la place ouverte reste sous le pointeur, sans aller-retour.
+        return step <= 0 ? n : Math.Clamp((int)Math.Floor((x + _offset) / step), 0, n);
+    }
+
+    /// <summary>Ouvre une place à l'endroit du pointeur : les onglets s'écartent pour accueillir l'onglet tenu.</summary>
+    public void ShowIncoming(double x)
+    {
+        int index = InsertionIndex(x);
+        if (index == _incoming) return;
+        _incoming = index;
+        _animateNext = true;
+        InvalidateMeasure();
+        InvalidateVisual();
+    }
+
+    /// <summary>Referme la place ouverte (l'onglet tenu est reparti, ou il vient d'être accueilli).</summary>
+    public void HideIncoming()
+    {
+        if (_incoming < 0) return;
+        _incoming = -1;
+        _animateNext = true;
+        InvalidateMeasure();
+        InvalidateVisual();
+    }
+
+    public int IncomingIndex => _incoming;
+
+    /// <summary>La place ouverte est dessinée comme un onglet vide, pour montrer où l'onglet va entrer.</summary>
+    protected override void OnRender(DrawingContext dc)
+    {
+        base.OnRender(dc);
+        if (_incoming < 0 || TryFindResource("Hover") is not Brush fill) return;
+        double x = _incoming * (_tabWidth + Gap) - _offset;
+        var shape = new RectangleGeometry(new Rect(x, 4, _tabWidth, Math.Max(0, ActualHeight - 4)), 7, 7);
+        var pen = TryFindResource("Accent") is Brush accent ? new Pen(accent, 1.5) { DashStyle = new DashStyle([3, 2], 0) } : null;
+        dc.DrawGeometry(fill, pen, shape);
     }
 
     // ---- Glisser un onglet le long de la bande ----
