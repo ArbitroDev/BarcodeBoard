@@ -1029,15 +1029,11 @@ public partial class MainWindow : Window
 
     private void Copy_Click(object sender, RoutedEventArgs e)
     {
-        if (Item(sender) is not { } item) return;
-        if (item.Matrix is null)
-        {
-            ShowToast(Loc.NoImage(item.ErrorMessage));
-            return;
-        }
+        // Le bouton est désactivé pour un code en erreur : il n'a pas d'image.
+        if (Item(sender) is not { Matrix: { } matrix }) return;
         try
         {
-            CodeImages.CopyToClipboard(CodeImages.ForClipboard(item.Matrix, _vm.CodeSize, _vm.DpiScale));
+            CodeImages.CopyToClipboard(CodeImages.ForClipboard(matrix, _vm.CodeSize, _vm.DpiScale));
             ShowToast(Loc.ImageCopied);
         }
         catch (ExternalException)
@@ -1178,7 +1174,7 @@ public partial class MainWindow : Window
 
     private void OpenFull(CodeItemViewModel item)
     {
-        if (item.ShowPlaceholder) return; // rien à montrer en grand : une erreur, ou un code trop large
+        if (item.HasError) return; // pas de code à montrer en grand (un code trop large pour sa carte, lui, peut l'être)
         _fullItem = item;
         FullView.Visibility = Visibility.Visible;
         RenderFull();
@@ -1192,10 +1188,11 @@ public partial class MainWindow : Window
         if (!codes.Contains(_fullItem)) { CloseFull(); return; }
 
         double maxW = Math.Max(100, Root.ActualWidth * 0.92), maxH = Math.Max(100, Root.ActualHeight - 200);
-        FullImage.Source = _fullItem.Matrix is null ? null : CodeImages.Fit(_fullItem.Matrix, maxW, maxH, _vm.DpiScale);
-        FullText.Text = _fullItem.HasError ? $"{_fullItem.Text}\n{_fullItem.ErrorMessage}" : _fullItem.Text;
-        // Seuls les codes affichables comptent : ce sont les seuls que les flèches font défiler.
-        var shown = codes.Where(c => !c.ShowPlaceholder).ToList();
+        // Le plein écran ne reçoit jamais un code en erreur (OpenFull, StepFull) : il a toujours une matrice.
+        FullImage.Source = CodeImages.Fit(_fullItem.Matrix!, maxW, maxH, _vm.DpiScale);
+        FullText.Text = FullImage.Source is null ? $"{_fullItem.Text}\n{Loc.TooWideFull}" : _fullItem.Text;
+        // Seuls les codes sans erreur comptent : ce sont les seuls que les flèches font défiler.
+        var shown = codes.Where(c => !c.HasError).ToList();
         FullCounter.Text = Loc.Counter(shown.IndexOf(_fullItem) + 1, shown.Count);
         FullPrevButton.IsEnabled = FullNextButton.IsEnabled = shown.Count > 1;
     }
@@ -1205,12 +1202,12 @@ public partial class MainWindow : Window
         if (_fullItem is null) return;
         var codes = _fullItem.Owner.Codes;
         if (codes.Count == 0) { CloseFull(); return; }
-        // Les codes non affichés dans leur carte sont sautés ; s'il n'y en a pas d'autre, on reste sur place.
+        // Les codes en erreur sont sautés ; s'il n'y en a pas d'autre, on reste sur place.
         int index = codes.IndexOf(_fullItem);
         for (int step = 1; step <= codes.Count; step++)
         {
             var next = codes[Cyclic.Wrap(index + step * delta, codes.Count)];
-            if (next.ShowPlaceholder) continue;
+            if (next.HasError) continue;
             _fullItem = next;
             break;
         }

@@ -75,6 +75,8 @@ public static class Loc
     public static string Add => T("Ajouter", "Add");
     public static string TooWide => T("Trop large pour être lu en entier ici : agrandissez la fenêtre ou ouvrez-le en plein écran.",
                                       "Too wide to be read in full here: widen the window or open it in full screen.");
+    public static string TooWideFull => T("Trop large pour être lu en entier, même en plein écran : agrandissez la fenêtre ou passez-le en QR code.",
+                                          "Too wide to be read in full, even in full screen: widen the window or switch it to a QR code.");
     public static string SwitchToQr => T("Passer en QR code", "Switch to QR code");
     public static string FullScreen => T("Plein écran", "Full screen");
     public static string CopyTextTip => T("Cliquer pour copier le texte", "Click to copy the text");
@@ -106,7 +108,6 @@ public static class Loc
 
     // ---- Messages temporaires ----
     public static string TypeBeforeAdd => T("Tapez un texte avant d'ajouter un code", "Type some text before adding a code");
-    public static string NoImage(string? error) => T($"Pas d'image à copier : {error}", $"No image to copy: {error}");
     public static string ImageCopied => T("Image du code copiée", "Code image copied");
     public static string ClipboardBusy => T("Le presse-papiers est occupé par une autre application. Réessayez.",
                                             "The clipboard is in use by another application. Try again.");
