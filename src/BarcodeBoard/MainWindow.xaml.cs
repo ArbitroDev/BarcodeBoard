@@ -1091,6 +1091,7 @@ public partial class MainWindow : Window
 
     private void OpenFull(CodeItemViewModel item)
     {
+        if (item.ShowPlaceholder) return; // rien à montrer en grand : une erreur, ou un code trop large
         _fullItem = item;
         FullView.Visibility = Visibility.Visible;
         RenderFull();
@@ -1114,7 +1115,15 @@ public partial class MainWindow : Window
         if (_fullItem is null) return;
         var codes = _fullItem.Owner.Codes;
         if (codes.Count == 0) { CloseFull(); return; }
-        _fullItem = codes[Cyclic.Wrap(codes.IndexOf(_fullItem) + delta, codes.Count)];
+        // Les codes non affichés dans leur carte sont sautés ; s'il n'y en a pas d'autre, on reste sur place.
+        int index = codes.IndexOf(_fullItem);
+        for (int step = 1; step <= codes.Count; step++)
+        {
+            var next = codes[Cyclic.Wrap(index + step * delta, codes.Count)];
+            if (next.ShowPlaceholder) continue;
+            _fullItem = next;
+            break;
+        }
         RenderFull();
     }
 

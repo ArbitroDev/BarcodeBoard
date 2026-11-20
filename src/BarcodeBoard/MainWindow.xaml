@@ -531,7 +531,8 @@
                                                                  Tag="{x:Static local:Loc.TextToEncode}" Text="{Binding Text, UpdateSourceTrigger=PropertyChanged}"
                                                                  GotKeyboardFocus="RowText_GotFocus" PreviewKeyDown="RowText_KeyDown"/>
                                                         <Button Grid.Column="3" Style="{StaticResource IconButton}" Width="26" Height="26" Margin="4,0,0,0"
-                                                                Click="Copy_Click" ToolTip="{x:Static local:Loc.CopyImage}">
+                                                                Click="Copy_Click" ToolTip="{x:Static local:Loc.CopyImage}"
+                                                                IsEnabled="{Binding ShowPlaceholder, Converter={StaticResource Not}}">
                                                             <Path Style="{StaticResource Icon}" Data="{StaticResource IcoCopy}"/>
                                                         </Button>
                                                         <Button Grid.Column="4" Style="{StaticResource IconButton}" Width="26" Height="26"
@@ -689,10 +690,13 @@
                                                     <Border x:Name="CardActions" BorderBrush="{DynamicResource CardDivider}" BorderThickness="0,1,0,0" Margin="0,8,0,0" Padding="0,6,0,0">
                                                         <DockPanel>
                                                             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-                                                                <Button Style="{StaticResource IconButton}" Click="Copy_Click" ToolTip="{x:Static local:Loc.CopyImage}">
+                                                                <!-- Code non affiché (erreur, trop large) : rien à copier ni à agrandir -->
+                                                                <Button Style="{StaticResource IconButton}" Click="Copy_Click" ToolTip="{x:Static local:Loc.CopyImage}"
+                                                                        IsEnabled="{Binding ShowPlaceholder, Converter={StaticResource Not}}">
                                                                     <Path Style="{StaticResource Icon}" Data="{StaticResource IcoCopy}"/>
                                                                 </Button>
-                                                                <Button Style="{StaticResource IconButton}" Click="Full_Click" ToolTip="{x:Static local:Loc.FullScreen}">
+                                                                <Button Style="{StaticResource IconButton}" Click="Full_Click" ToolTip="{x:Static local:Loc.FullScreen}"
+                                                                        IsEnabled="{Binding ShowPlaceholder, Converter={StaticResource Not}}">
                                                                     <Path Style="{StaticResource Icon}" Data="{StaticResource IcoFull}"/>
                                                                 </Button>
                                                                 <Button Style="{StaticResource IconButton}" Click="Delete_Click" ToolTip="{x:Static local:Loc.Delete}">
@@ -719,9 +723,16 @@
                                             </DataTrigger>
                                             <DataTrigger Binding="{Binding IsScanFocus}" Value="True">
                                                 <Setter TargetName="SelRing" Property="Visibility" Value="Visible"/>
-                                                <!-- Le pointeur ne doit pas masquer le code pendant la lecture -->
-                                                <Setter TargetName="CodeVisual" Property="Cursor" Value="None"/>
                                             </DataTrigger>
+                                            <!-- Le pointeur ne doit pas masquer le code pendant la lecture ; sans code affiché,
+                                                 il reste visible pour cliquer sur « Passer en QR code » -->
+                                            <MultiDataTrigger>
+                                                <MultiDataTrigger.Conditions>
+                                                    <Condition Binding="{Binding IsScanFocus}" Value="True"/>
+                                                    <Condition Binding="{Binding ShowPlaceholder}" Value="False"/>
+                                                </MultiDataTrigger.Conditions>
+                                                <Setter TargetName="CodeVisual" Property="Cursor" Value="None"/>
+                                            </MultiDataTrigger>
                                             <DataTrigger Binding="{Binding IsBlurred}" Value="True">
                                                 <Setter TargetName="CodeVisual" Property="Effect">
                                                     <Setter.Value>
