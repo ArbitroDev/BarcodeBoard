@@ -82,7 +82,9 @@ public sealed class CodeItemViewModel : Observable
     /// <summary>À la place du code : une erreur, ou un code trop large (jamais un code coupé, illisible).</summary>
     public bool ShowPlaceholder => HasError || TooWide;
     public string? PlaceholderMessage => HasError ? ErrorMessage : TooWide ? Loc.TooWide : null;
-    public bool CanSwitchToQr => _result.Error?.Kind == CodeErrorKind.NotAscii || (TooWide && Type == CodeType.Code128);
+    /// <summary>Code 128 impossible à afficher (caractère refusé, texte trop long ou trop large) : un QR code le peut.</summary>
+    public bool CanSwitchToQr => Type == CodeType.Code128
+        && (_result.Error?.Kind is CodeErrorKind.NotAscii or CodeErrorKind.TooLong || TooWide);
 
     /// <summary>Taille du cadre d'erreur, pour qu'il occupe la place du code.</summary>
     public double PlaceholderWidth => Owner.Main.CodeSize;
