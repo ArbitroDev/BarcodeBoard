@@ -7,6 +7,7 @@ namespace BarcodeBoard;
 /// Bande d'onglets façon navigateur : les onglets rétrécissent quand il y en a beaucoup,
 /// puis la bande défile (molette) en gardant toujours l'onglet actif visible.
 /// La place des boutons « + » et « liste des onglets » est réservée à droite.
+/// Comme dans l'Explorateur de Windows 11, un onglet se glisse le long de la bande pour changer de place.
 /// </summary>
 public sealed class TabStripPanel : Panel
 {
@@ -14,6 +15,9 @@ public sealed class TabStripPanel : Panel
 
     private double _offset, _tabWidth;
     private bool _revealSelected = true;
+
+    private UIElement? _dragged;
+    private double _dragX;
 
     public TabStripPanel() => ClipToBounds = true;
 
@@ -52,7 +56,7 @@ public sealed class TabStripPanel : Panel
         double step = _tabWidth + Gap;
         double maxOffset = Math.Max(0, n * step - final.Width);
 
-        if (_revealSelected)
+        if (_revealSelected && _dragged is null)
         {
             for (int i = 0; i < n; i++)
             {
@@ -67,10 +71,64 @@ public sealed class TabStripPanel : Panel
         }
         _offset = Math.Clamp(_offset, 0, maxOffset);
 
-        for (int i = 0; i < n; i++)
-            InternalChildren[i].Arrange(new Rect(i * step - _offset, 0, _tabWidth, final.Height));
+        // Pendant un glisser, l'onglet tiré suit le pointeur et les autres lui laissent la place où il tomberait.
+        int from = _dragged is null ? -1 : InternalChildren.IndexOf(_dragged);
+        int target = from < 0 ? -1 : DropIndex();
+
+        for (int i = 0, slot = 0; i < n; i++)
+        {
+            double x;
+            if (i == from) x = DraggedX(n, step);
+            else
+            {
+                if (slot == target) slot++;
+                x = slot++ * step - _offset;
+            }
+            InternalChildren[i].Arrange(new Rect(x, 0, _tabWidth, final.Height));
+        }
         return final;
     }
+
+    private double DraggedX(int n, double step) => Math.Clamp(_dragX, -_offset, (n - 1) * step - _offset);
+
+    /// <summary>Place que prendrait l'onglet tiré s'il était lâché maintenant : celle dont il couvre le plus.</summary>
+    private int DropIndex()
+    {
+        int n = InternalChildren.Count;
+        double step = _tabWidth + Gap;
+        return step <= 0 ? 0 : Math.Clamp((int)Math.Round((DraggedX(n, step) + _offset) / step), 0, n - 1);
+    }
+
+    // ---- Glisser un onglet le long de la bande ----
+
+    /// <summary>Commence à faire suivre le pointeur à cet onglet.</summary>
+    public void BeginDrag(UIElement child)
+    {
+        _dragged = child;
+        SetZIndex(child, 1);
+    }
+
+    /// <summary>Bord gauche voulu pour l'onglet tiré, dans le repère de la bande.</summary>
+    public void DragTo(double left)
+    {
+        if (_dragged is null) return;
+        _dragX = left;
+        InvalidateArrange();
+    }
+
+    /// <summary>Fin du glisser ; rend la place où l'onglet a été lâché, ou -1 s'il n'y avait pas de glisser.</summary>
+    public int EndDrag()
+    {
+        if (_dragged is null) return -1;
+        int index = DropIndex();
+        SetZIndex(_dragged, 0);
+        _dragged = null;
+        _revealSelected = true;
+        InvalidateArrange();
+        return index;
+    }
+
+    public bool IsDragging => _dragged is not null;
 
     /// <summary>Défilement à la molette.</summary>
     public void ScrollBy(double delta)

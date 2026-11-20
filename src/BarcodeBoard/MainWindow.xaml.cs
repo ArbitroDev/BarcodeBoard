@@ -477,15 +477,39 @@ public partial class MainWindow : Window
     {
         if (e.LeftButton != MouseButtonState.Pressed)
         {
+            EndTabReorder(_tabDragCandidate);
             _tabDragCandidate = null;
             if (sender is UIElement { IsMouseCaptured: true } element) element.ReleaseMouseCapture();
             return;
         }
-        if (_tabDragCandidate is not { } tab || tab.IsRenaming) return;
+        if (_tabDragCandidate is not { } tab || tab.IsRenaming || StripPanel is not { } panel) return;
+        var p = e.GetPosition(this);
         // L'onglet est arraché quand le pointeur quitte la bande d'onglets vers le haut ou le bas.
-        if (Math.Abs(e.GetPosition(this).Y - _tabDragStart.Y) < 18) return;
-        _tabDragCandidate = null;
-        TearOff(tab, _tabGrab);
+        if (Math.Abs(p.Y - _tabDragStart.Y) >= 18)
+        {
+            _tabDragCandidate = null;
+            panel.EndDrag(); // il quitte la bande : sa place dans la bande n'a plus d'importance
+            TearOff(tab, _tabGrab);
+            return;
+        }
+        // Sinon il glisse le long de la bande, et les autres onglets lui font de la place.
+        if (!panel.IsDragging)
+        {
+            if (Math.Abs(p.X - _tabDragStart.X) < SystemParameters.MinimumHorizontalDragDistance) return;
+            if (TabStrip.ItemContainerGenerator.ContainerFromItem(tab) is not UIElement container) return;
+            panel.BeginDrag(container);
+        }
+        panel.DragTo(e.GetPosition(panel).X - _tabGrab.X);
+    }
+
+    /// <summary>Onglet lâché après un glisser le long de la bande : il prend la place où il a été lâché.</summary>
+    private void EndTabReorder(TabViewModel? tab)
+    {
+        if (StripPanel is not { } panel) return;
+        int to = panel.EndDrag();
+        int from = tab is null ? -1 : _vm.Tabs.IndexOf(tab);
+        if (to < 0 || from < 0 || to == from) return;
+        _vm.Tabs.Move(from, to);
     }
 
     /// <summary>
@@ -684,10 +708,18 @@ public partial class MainWindow : Window
 
     private void Tab_MouseUp(object sender, MouseButtonEventArgs e)
     {
+        EndTabReorder(_tabDragCandidate);
         _tabDragCandidate = null;
         if (sender is UIElement { IsMouseCaptured: true } element) element.ReleaseMouseCapture();
         if (e.ChangedButton == MouseButton.Middle && ((FrameworkElement)sender).DataContext is TabViewModel tab)
             CloseTab(tab);
+    }
+
+    /// <summary>Souris perdue en plein glisser (changement de fenêtre…) : l'onglet reste où il est.</summary>
+    private void Tab_LostMouseCapture(object sender, MouseEventArgs e)
+    {
+        EndTabReorder(_tabDragCandidate);
+        _tabDragCandidate = null;
     }
 
     private void CloseTab_Click(object sender, RoutedEventArgs e)

@@ -338,6 +338,7 @@
                         <DataTemplate DataType="{x:Type local:TabViewModel}">
                             <Grid x:Name="TabRoot" Height="34" Background="Transparent" ToolTip="{Binding ToolTip}"
                                   MouseLeftButtonDown="Tab_MouseDown" MouseMove="Tab_MouseMove" MouseUp="Tab_MouseUp"
+                                  LostMouseCapture="Tab_LostMouseCapture"
                                   ContextMenuOpening="Tab_ContextMenuOpening">
                                 <!-- Rempli à l'ouverture : nouvelle fenêtre, autres fenêtres, fermer -->
                                 <Grid.ContextMenu>
