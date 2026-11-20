@@ -96,8 +96,9 @@ Examples: `feat(scan): compare the scanned text with the expected code`,
 - Codes are always **pure black on pure white**, whatever the theme.
 - Each module is a whole number of physical pixels: never smoothed, never stretched
   (`Stretch="None"`, nearest-neighbor scaling). A scanner needs the whole code: a code too wide
-  for its card gets thinner, down to one pixel per module, then is replaced by a message. It is
-  never cut, and it can then be neither copied nor opened in full screen.
+  for its card gets thinner, down to one pixel per module, then is replaced by a message; it can
+  still be copied or opened in full screen. It is never cut. A code with an error can be neither
+  copied nor opened in full screen.
 - Quiet zones: 4 modules for QR codes, 10 for Code 128.
 - Any change of the drawing comes with a test that reads the code back (see `CoreTests.cs`).
 
