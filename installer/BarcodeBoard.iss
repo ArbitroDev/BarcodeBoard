@@ -90,11 +90,22 @@ Filename: "{app}\{#AppExe}"; Description: "{cm:LaunchProgram,{cm:AppName}}"; Fla
 const
   UninstallKey = 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{1B6750FA-7100-4E8E-A760-6DB9EBEC5C8B}_is1';
 
+// Retire d'une version sa partie de préversion (« 1.2.0-rc.1 » → « 1.2.0 ») ; vrai s'il y en avait une.
+function StripPrerelease(var Version: String): Boolean;
+begin
+  Result := Pos('-', Version) > 0;
+  if Result then Version := Copy(Version, 1, Pos('-', Version) - 1);
+end;
+
 // Compare deux versions « 1.2.3 » nombre par nombre : > 0 si A est plus récente que B.
+// À numéros égaux, une préversion (« 1.2.0-rc.1 ») est plus ancienne que la version finale (« 1.2.0 »).
 function CompareVersions(A, B: String): Integer;
 var
   PartA, PartB: Integer;
+  PreA, PreB: Boolean;
 begin
+  PreA := StripPrerelease(A);
+  PreB := StripPrerelease(B);
   Result := 0;
   while (Result = 0) and ((A <> '') or (B <> '')) do
   begin
@@ -105,6 +116,8 @@ begin
     if PartA > PartB then Result := 1
     else if PartA < PartB then Result := -1;
   end;
+  if (Result = 0) and PreA and not PreB then Result := -1
+  else if (Result = 0) and PreB and not PreA then Result := 1;
 end;
 
 // Version installée la plus récente, pour l'utilisateur ou pour tout l'ordinateur ; vide si aucune.
@@ -115,7 +128,7 @@ begin
   Result := '';
   if RegQueryStringValue(HKCU, UninstallKey, 'DisplayVersion', Version) and (CompareVersions(Version, Result) > 0) then Result := Version;
   if RegQueryStringValue(HKLM32, UninstallKey, 'DisplayVersion', Version) and (CompareVersions(Version, Result) > 0) then Result := Version;
-  if IsWin64 and RegQueryStringValue(HKLM64, UninstallKey, 'DisplayVersion', Version) and (CompareVersions(Version, Result) > 0) then Result := Version;
+  if RegQueryStringValue(HKLM64, UninstallKey, 'DisplayVersion', Version) and (CompareVersions(Version, Result) > 0) then Result := Version;
 end;
 
 function InitializeSetup(): Boolean;
