@@ -1139,7 +1139,10 @@ public partial class MainWindow : Window
         double maxW = Math.Max(100, Root.ActualWidth * 0.92), maxH = Math.Max(100, Root.ActualHeight - 200);
         FullImage.Source = _fullItem.Matrix is null ? null : CodeImages.Fit(_fullItem.Matrix, maxW, maxH, _vm.DpiScale);
         FullText.Text = _fullItem.HasError ? $"{_fullItem.Text}\n{_fullItem.ErrorMessage}" : _fullItem.Text;
-        FullCounter.Text = Loc.Counter(codes.IndexOf(_fullItem) + 1, codes.Count);
+        // Seuls les codes affichables comptent : ce sont les seuls que les flèches font défiler.
+        var shown = codes.Where(c => !c.ShowPlaceholder).ToList();
+        FullCounter.Text = Loc.Counter(shown.IndexOf(_fullItem) + 1, shown.Count);
+        FullPrevButton.IsEnabled = FullNextButton.IsEnabled = shown.Count > 1;
     }
 
     private void StepFull(int delta)

@@ -775,11 +775,11 @@
                 </Border>
             </StackPanel>
             <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,22">
-                <Button Style="{StaticResource SecondaryButton}" Height="32" FontSize="13" Padding="14,0" Click="FullPrev_Click">
+                <Button Style="{StaticResource SecondaryButton}" Height="32" FontSize="13" Padding="14,0" Click="FullPrev_Click" x:Name="FullPrevButton">
                     <TextBlock Text="{x:Static local:Loc.Previous}" Margin="0,0,0,2"/>
                 </Button>
                 <TextBlock x:Name="FullCounter" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" Margin="14,0,14,1"/>
-                <Button Style="{StaticResource SecondaryButton}" Height="32" FontSize="13" Padding="14,0" Click="FullNext_Click">
+                <Button Style="{StaticResource SecondaryButton}" Height="32" FontSize="13" Padding="14,0" Click="FullNext_Click" x:Name="FullNextButton">
                     <TextBlock Text="{x:Static local:Loc.Next}" Margin="0,0,0,2"/>
                 </Button>
                 <Button Style="{StaticResource SecondaryButton}" Height="32" FontSize="13" Padding="14,0" Margin="10,0,0,0" Click="FullClose_Click">
