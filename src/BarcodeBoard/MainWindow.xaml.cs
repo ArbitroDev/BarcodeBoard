@@ -550,11 +550,31 @@ public partial class MainWindow : Window
 
         moving.FollowPointerUntilRelease();
 
-        var previewed = moving.EndMergePreview();
-        if (!Native.GetCursorPos(out var pt)) { previewed?.StripPanel?.HideIncoming(); return; }
-        var target = AppWindows.All.FirstOrDefault(w => w != moving && w.IsOverTabBar(pt));
+        var previewed = moving._mergeTarget;
+        moving._mergeTarget = null;
+        MainWindow? target = null;
+        if (Native.GetCursorPos(out var pt)) target = TabBarUnder(pt, moving);
         if (previewed is not null && previewed != target) previewed.StripPanel?.HideIncoming();
-        target?.TakeTab(moving, tab, pt);
+        if (target is null)
+        {
+            moving.SetTranslucent(false);
+            return;
+        }
+        // Fusion : la fenêtre tenue disparaît tout de suite (elle se ferme une fois vidée), sans redevenir opaque.
+        moving.Hide();
+        moving.SetTranslucent(false);
+        target.TakeTab(moving, tab, pt);
+    }
+
+    /// <summary>Fenêtre de l'application dont la barre d'onglets est sous ce point ; la plus en avant si plusieurs.</summary>
+    private static MainWindow? TabBarUnder(Native.POINT pt, MainWindow except)
+    {
+        var candidates = AppWindows.All.Where(w => w != except && w.IsOverTabBar(pt)).ToList();
+        if (candidates.Count <= 1) return candidates.FirstOrDefault();
+        // Parcours des fenêtres de l'écran de la plus en avant à la plus en arrière.
+        for (var h = Native.GetTopWindow(IntPtr.Zero); h != IntPtr.Zero; h = Native.GetWindow(h, Native.GW_HWNDNEXT))
+            if (candidates.FirstOrDefault(w => new WindowInteropHelper(w).Handle == h) is { } front) return front;
+        return candidates[0];
     }
 
     // ---- Aperçu de la fusion pendant que la fenêtre suit le pointeur ----
@@ -575,7 +595,7 @@ public partial class MainWindow : Window
     private void UpdateMergePreview()
     {
         if (!Native.GetCursorPos(out var pt)) return;
-        var target = AppWindows.All.FirstOrDefault(w => w != this && w.IsOverTabBar(pt));
+        var target = TabBarUnder(pt, this);
         if (target != _mergeTarget)
         {
             _mergeTarget?.StripPanel?.HideIncoming();
@@ -583,15 +603,6 @@ public partial class MainWindow : Window
             SetTranslucent(target is not null);
         }
         if (target?.StripPanel is { } panel) panel.ShowIncoming(panel.PointFromScreen(new Point(pt.X, pt.Y)).X);
-    }
-
-    /// <summary>Fin du déplacement : rend la fenêtre opaque, referme la place ouverte et rend la fenêtre visée.</summary>
-    private MainWindow? EndMergePreview()
-    {
-        var target = _mergeTarget;
-        _mergeTarget = null;
-        SetTranslucent(false);
-        return target;
     }
 
     private void SetTranslucent(bool on)
@@ -604,7 +615,13 @@ public partial class MainWindow : Window
             Native.SetLayeredWindowAttributes(hwnd, 0, 110, Native.LWA_ALPHA);
         }
         else if ((style & Native.WS_EX_LAYERED) != 0)
+        {
             Native.SetWindowLongPtr(hwnd, Native.GWL_EXSTYLE, new IntPtr(style & ~Native.WS_EX_LAYERED));
+            // Windows demande de redessiner la fenêtre une fois le style retiré, sinon elle peut rester un instant
+            // noire ou figée.
+            Native.RedrawWindow(hwnd, IntPtr.Zero, IntPtr.Zero,
+                Native.RDW_ERASE | Native.RDW_INVALIDATE | Native.RDW_FRAME | Native.RDW_ALLCHILDREN);
+        }
     }
 
     private Point PointToScreenDip(Point p)
@@ -1368,4 +1385,10 @@ internal static class Native
     [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW")] public static extern IntPtr GetWindowLongPtr(IntPtr hwnd, int index);
     [DllImport("user32.dll", EntryPoint = "SetWindowLongPtrW")] public static extern IntPtr SetWindowLongPtr(IntPtr hwnd, int index, IntPtr value);
     [DllImport("user32.dll")] public static extern bool SetLayeredWindowAttributes(IntPtr hwnd, uint colorKey, byte alpha, uint flags);
+    public const uint RDW_INVALIDATE = 0x1, RDW_ERASE = 0x4, RDW_ALLCHILDREN = 0x80, RDW_FRAME = 0x400;
+    [DllImport("user32.dll")] public static extern bool RedrawWindow(IntPtr hwnd, IntPtr rect, IntPtr region, uint flags);
+
+    public const uint GW_HWNDNEXT = 2;
+    [DllImport("user32.dll")] public static extern IntPtr GetTopWindow(IntPtr hwnd);
+    [DllImport("user32.dll")] public static extern IntPtr GetWindow(IntPtr hwnd, uint cmd);
 }
