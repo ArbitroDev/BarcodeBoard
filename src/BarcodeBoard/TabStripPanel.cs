@@ -72,7 +72,8 @@ public sealed class TabStripPanel : Panel
             {
                 if (InternalChildren[i] is FrameworkElement { DataContext: TabViewModel { IsActive: true } })
                 {
-                    double left = i * step, right = left + _tabWidth;
+                    // Sa place, décalée d'un cran s'il est après la place ouverte pour un onglet d'une autre fenêtre.
+                    double left = (_incoming >= 0 && i >= _incoming ? i + 1 : i) * step, right = left + _tabWidth;
                     if (left < _offset) _offset = left;
                     else if (right > _offset + final.Width) _offset = right - final.Width;
                     break;
@@ -116,6 +117,7 @@ public sealed class TabStripPanel : Panel
     /// <summary>Fait partir l'onglet de sa place affichée (décalée de <paramref name="shift"/>) jusqu'à sa nouvelle place.</summary>
     private static void Slide(UIElement child, double shift)
     {
+        if (Math.Abs(shift) < 0.5) return; // même place : l'animation en cours, s'il y en a une, se termine
         if (child.RenderTransform is not TranslateTransform t)
             child.RenderTransform = t = new TranslateTransform();
         double from = shift + t.X; // un onglet encore en mouvement repart d'où il est vraiment
@@ -131,14 +133,52 @@ public sealed class TabStripPanel : Panel
         t.X = 0;
     }
 
-    private double DraggedX(int n, double step) => Math.Clamp(_dragX, -_offset, (n - 1) * step - _offset);
+    /// <summary>
+    /// Bord gauche de l'onglet tiré : il reste dans la partie visible de la bande (qui défile toute seule quand on
+    /// pousse contre un bord, voir <see cref="AutoScroll"/>) et ne dépasse pas le premier ni le dernier onglet.
+    /// </summary>
+    private double DraggedX(int n, double step)
+    {
+        double min = Math.Max(-_offset, 0);
+        double max = Math.Min((n - 1) * step - _offset, ActualWidth - _tabWidth);
+        return max < min ? min : Math.Clamp(_dragX, min, max);
+    }
 
     /// <summary>Place que prendrait l'onglet tiré s'il était lâché maintenant : celle dont il couvre le plus.</summary>
     private int DropIndex()
     {
         int n = InternalChildren.Count;
         double step = _tabWidth + Gap;
+        if (n == 0) return -1;
         return step <= 0 ? 0 : Math.Clamp((int)Math.Round((DraggedX(n, step) + _offset) / step), 0, n - 1);
+    }
+
+    // Défilement automatique : l'onglet tiré poussé contre un bord fait défiler la bande, tant qu'il y reste.
+    private System.Windows.Threading.DispatcherTimer? _scrollTimer;
+
+    private void AutoScroll()
+    {
+        double over = _dragX < 0 ? _dragX : Math.Max(0, _dragX - (ActualWidth - _tabWidth));
+        if (_dragged is null || !IsOverflowing || Math.Abs(over) < 1)
+        {
+            _scrollTimer?.Stop();
+            return;
+        }
+        if (_scrollTimer is null)
+        {
+            _scrollTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
+            _scrollTimer.Tick += (_, _) => AutoScrollStep();
+        }
+        _scrollTimer.Start();
+    }
+
+    private void AutoScrollStep()
+    {
+        double over = _dragX < 0 ? _dragX : Math.Max(0, _dragX - (ActualWidth - _tabWidth));
+        if (_dragged is null || Math.Abs(over) < 1) { _scrollTimer?.Stop(); return; }
+        // Plus le pointeur dépasse, plus la bande défile vite (avec une limite).
+        _offset += Math.Clamp(over / 4, -24, 24);
+        InvalidateArrange();
     }
 
     protected override void OnVisualChildrenChanged(DependencyObject added, DependencyObject removed)
@@ -210,13 +250,15 @@ public sealed class TabStripPanel : Panel
         _dragX = left;
         _animateNext = true;
         InvalidateArrange();
+        AutoScroll();
     }
 
     /// <summary>Fin du glisser ; rend la place où l'onglet a été lâché, ou -1 s'il n'y avait pas de glisser.</summary>
     public int EndDrag()
     {
+        _scrollTimer?.Stop();
         if (_dragged is null) return -1;
-        int index = DropIndex();
+        int index = InternalChildren.Contains(_dragged) ? DropIndex() : -1;
         SetZIndex(_dragged, 0);
         _dragged = null;
         _revealSelected = true;

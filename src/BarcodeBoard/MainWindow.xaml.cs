@@ -345,6 +345,15 @@ public partial class MainWindow : Window
             return;
         }
 
+        // Échap pendant un glisser d'onglet : l'onglet revient à sa place.
+        if (key == Key.Escape && StripPanel is { IsDragging: true })
+        {
+            CancelTabReorder();
+            Mouse.Capture(null);
+            e.Handled = true;
+            return;
+        }
+
         if (_vm.ScanMode && ctrl)
         {
             // Une douchette envoie les caractères de contrôle (GS du GS1-128…) en Ctrl+lettre : ils vont dans
@@ -763,17 +772,28 @@ public partial class MainWindow : Window
 
     private void Tab_MouseUp(object sender, MouseButtonEventArgs e)
     {
-        EndTabReorder(_tabDragCandidate);
-        _tabDragCandidate = null;
-        if (sender is UIElement { IsMouseCaptured: true } element) element.ReleaseMouseCapture();
-        if (e.ChangedButton == MouseButton.Middle && ((FrameworkElement)sender).DataContext is TabViewModel tab)
+        if (e.ChangedButton == MouseButton.Left)
+        {
+            EndTabReorder(_tabDragCandidate);
+            _tabDragCandidate = null;
+            if (sender is UIElement { IsMouseCaptured: true } element) element.ReleaseMouseCapture();
+        }
+        // Clic du milieu : ferme l'onglet, sauf en plein glisser (un autre bouton ne doit pas l'interrompre).
+        else if (e.ChangedButton == MouseButton.Middle && _tabDragCandidate is null
+                 && ((FrameworkElement)sender).DataContext is TabViewModel tab)
             CloseTab(tab);
     }
 
-    /// <summary>Souris perdue en plein glisser (changement de fenêtre…) : l'onglet reste où il est.</summary>
+    /// <summary>Souris perdue en plein glisser (changement de fenêtre…) : le glisser est annulé, l'onglet reste où il était.</summary>
     private void Tab_LostMouseCapture(object sender, MouseEventArgs e)
     {
-        EndTabReorder(_tabDragCandidate);
+        if (e.OriginalSource != sender) return; // perte de souris d'un élément de l'onglet (zone de renommage…)
+        CancelTabReorder();
+    }
+
+    private void CancelTabReorder()
+    {
+        StripPanel?.EndDrag();
         _tabDragCandidate = null;
     }
 
