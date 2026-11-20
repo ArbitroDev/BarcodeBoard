@@ -46,6 +46,14 @@ $body = New-Object System.Text.StringBuilder
 foreach ($block in $blocks) {
     $text = $block -join ' '
     if ($text -match '^-{3,}$') { continue }
+    # Syntaxe non convertie (titre de niveau 3, liste à puces ou numérotée, citation, code, italique) : elle
+    # resterait brute dans l'installeur. On s'arrête plutôt, et la compilation de l'installeur le signale.
+    foreach ($line in $block) {
+        if ($line -match '^(#{3,} |[-*+] |\d+\. |>|```)' -or $line.Contains('`') -or ($line -replace '\*\*', '').Contains('*')) {
+            [Console]::Error.WriteLine("license-rtf.ps1: Markdown not supported, add it to the conversion: $line")
+            exit 1
+        }
+    }
     if ($text -match '^# (.+)$') { [void]$body.Append("\pard\sa160\b\fs28 $(ConvertTo-RtfInline $Matches[1])\b0\fs18\par`r`n") }
     elseif ($text -match '^## (.+)$') { [void]$body.Append("\pard\sb120\sa80\b\fs22 $(ConvertTo-RtfInline $Matches[1])\b0\fs18\par`r`n") }
     elseif ($text -match '^[a-z]\) ') { [void]$body.Append("\pard\li300\fi-300\sa100 $(ConvertTo-RtfInline $text)\par`r`n") }
