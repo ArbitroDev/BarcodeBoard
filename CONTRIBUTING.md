@@ -86,7 +86,7 @@ Examples: `feat(scan): compare the scanned text with the expected code`,
 | `src/BarcodeBoard.Core` | Code generation (ZXing.Net), pixel layout, `.codes` files, language. No WPF, fully tested. |
 | `src/BarcodeBoard` | The WPF app |
 | `tests/BarcodeBoard.Core.Tests` | Tests of the core, and checks of the theme resources |
-| `installer` | Inno Setup script |
+| `installer` | Inno Setup script, and the conversion of the license for its license page |
 | `tools/IconGen.cs` | Icon generator |
 
 ## Rules of the project
@@ -95,8 +95,9 @@ Examples: `feat(scan): compare the scanned text with the expected code`,
 
 - Codes are always **pure black on pure white**, whatever the theme.
 - Each module is a whole number of physical pixels: never smoothed, never stretched
-  (`Stretch="None"`, nearest-neighbor scaling). A code too wide for its card scrolls; it is never
-  shrunk below one pixel per module.
+  (`Stretch="None"`, nearest-neighbor scaling). A scanner needs the whole code: a code too wide
+  for its card gets thinner, down to one pixel per module, then is replaced by a message. It is
+  never cut, and it can then be neither copied nor opened in full screen.
 - Quiet zones: 4 modules for QR codes, 10 for Code 128.
 - Any change of the drawing comes with a test that reads the code back (see `CoreTests.cs`).
 
