@@ -672,9 +672,13 @@
                                                                 </StackPanel>
                                                             </Grid>
                                                         </Grid>
+                                                        <!-- Limité à la taille du code : un long texte ne doit jamais agrandir la carte, sinon
+                                                             la carte change de taille (et la grille se réorganise) selon qu'elle est nette ou non -->
                                                         <Border x:Name="Overlay" Visibility="Collapsed" Background="{DynamicResource OverlayBg}" BorderBrush="{DynamicResource OverlayBorder}" BorderThickness="1"
-                                                                CornerRadius="4" Padding="9,5" HorizontalAlignment="Center" VerticalAlignment="Center">
-                                                            <TextBlock Text="{Binding Text}" FontFamily="{StaticResource Mono}" FontSize="13" TextWrapping="Wrap" TextAlignment="Center"/>
+                                                                CornerRadius="4" Padding="9,5" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                                MaxWidth="{Binding ActualWidth, ElementName=CodeVisual}" MaxHeight="{Binding ActualHeight, ElementName=CodeVisual}">
+                                                            <TextBlock Text="{Binding Text}" FontFamily="{StaticResource Mono}" FontSize="13" TextWrapping="Wrap" TextAlignment="Center"
+                                                                       TextTrimming="CharacterEllipsis"/>
                                                         </Border>
                                                     </Grid>
                                                     <Border x:Name="CardText" Style="{StaticResource CopyText}" Margin="0,6,0,0" HorizontalAlignment="Center"
