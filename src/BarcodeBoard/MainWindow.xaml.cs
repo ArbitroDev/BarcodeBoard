@@ -548,7 +548,7 @@ public partial class MainWindow : Window
             moving.PlaceTabUnderPointer(tab, grab);
         }
 
-        moving.FollowPointerUntilRelease();
+        moving.FollowPointerUntilRelease(tab, grab);
 
         var previewed = moving._mergeTarget;
         moving._mergeTarget = null;
@@ -584,8 +584,11 @@ public partial class MainWindow : Window
 
     private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
-        if (msg == Native.WM_MOVING && _followingPointer) UpdateMergePreview();
-        return IntPtr.Zero;
+        if (msg != Native.WM_MOVING || !_followingPointer) return IntPtr.Zero;
+        UpdateMergePreview();
+        if (!KeepTabUnderPointer(lParam)) return IntPtr.Zero;
+        handled = true;
+        return new IntPtr(1);
     }
 
     /// <summary>
@@ -634,26 +637,65 @@ public partial class MainWindow : Window
     /// <summary>Place la fenêtre pour que son onglet soit sous le pointeur, au point où il a été saisi.</summary>
     private void PlaceTabUnderPointer(TabViewModel tab, Point grab)
     {
-        var hwnd = new WindowInteropHelper(this).Handle;
-        if (TabStrip.ItemContainerGenerator.ContainerFromItem(tab) is not FrameworkElement header
-            || !Native.GetCursorPos(out var pt) || !Native.GetWindowRect(hwnd, out var win) || !Native.GetClientScreenRect(hwnd, out var client))
-            return;
-        var origin = header.TranslatePoint(new Point(grab.X, grab.Y), this);
-        double s = _vm.DpiScale;
-        int x = pt.X - (client.Left - win.Left) - (int)Math.Round(origin.X * s);
-        int y = pt.Y - (client.Top - win.Top) - (int)Math.Round(origin.Y * s);
-        Native.SetWindowPos(hwnd, IntPtr.Zero, x, y, 0, 0, Native.SWP_NOSIZE | Native.SWP_NOZORDER);
+        if (Native.GetCursorPos(out var pt)) PlaceTabAt(tab, grab, pt);
     }
 
-    /// <summary>Déplacement de fenêtre de Windows, comme en tirant la barre de titre ; rend la main au relâchement.</summary>
-    private void FollowPointerUntilRelease()
+    /// <summary>Déplace la fenêtre pour que le point saisi de l'onglet tombe sur ce point de l'écran (pixels physiques).</summary>
+    private void PlaceTabAt(TabViewModel tab, Point grab, Native.POINT pt)
+    {
+        var hwnd = new WindowInteropHelper(this).Handle;
+        if (GrabOffset(tab, grab) is not { } offset) return;
+        Native.SetWindowPos(hwnd, IntPtr.Zero, pt.X - offset.X, pt.Y - offset.Y, 0, 0, Native.SWP_NOSIZE | Native.SWP_NOZORDER);
+    }
+
+    /// <summary>
+    /// Écart, en pixels physiques, entre le coin de la fenêtre et le point saisi de l'onglet. Lu à l'écran : il
+    /// tient compte de l'échelle et des bordures, même pour une fenêtre qui vient d'être créée.
+    /// </summary>
+    private Native.POINT? GrabOffset(TabViewModel tab, Point grab)
+    {
+        var hwnd = new WindowInteropHelper(this).Handle;
+        if (TabStrip.ItemContainerGenerator.ContainerFromItem(tab) is not FrameworkElement header
+            || !Native.GetWindowRect(hwnd, out var win))
+            return null;
+        var current = header.PointToScreen(grab);
+        return new Native.POINT { X = (int)Math.Round(current.X) - win.Left, Y = (int)Math.Round(current.Y) - win.Top };
+    }
+
+    private Native.POINT? _followOffset;
+
+    /// <summary>
+    /// Déplacement de fenêtre de Windows, comme en tirant la barre de titre ; rend la main au relâchement.
+    /// La fenêtre est recalée à chaque mouvement pour que le point saisi de l'onglet reste sous le pointeur :
+    /// sinon Windows garde l'écart du début du déplacement, faussé quand le pointeur a bougé pendant que la
+    /// nouvelle fenêtre se créait.
+    /// </summary>
+    private void FollowPointerUntilRelease(TabViewModel tab, Point grab)
     {
         var hwnd = new WindowInteropHelper(this).Handle;
         Mouse.Capture(null);
         Native.ReleaseCapture();
+        // Fenêtre agrandie : Windows la restaure en début de déplacement et la place lui-même sous le pointeur.
+        _followOffset = WindowState == WindowState.Normal ? GrabOffset(tab, grab) : null;
         _followingPointer = true;
-        try { Native.SendMessage(hwnd, Native.WM_NCLBUTTONDOWN, Native.HTCAPTION, IntPtr.Zero); }
-        finally { _followingPointer = false; }
+        Native.GetCursorPos(out var pt);
+        var at = new IntPtr(((pt.Y & 0xFFFF) << 16) | (pt.X & 0xFFFF)); // position du pointeur, comme un vrai clic
+        try { Native.SendMessage(hwnd, Native.WM_NCLBUTTONDOWN, Native.HTCAPTION, at); }
+        finally { _followingPointer = false; _followOffset = null; }
+    }
+
+    /// <summary>Fenêtre proposée par Windows pendant le déplacement : recalée sous le pointeur.</summary>
+    private bool KeepTabUnderPointer(IntPtr rectPtr)
+    {
+        if (_followOffset is not { } offset || !Native.GetCursorPos(out var pt)) return false;
+        var rect = Marshal.PtrToStructure<Native.RECT>(rectPtr);
+        int width = rect.Right - rect.Left, height = rect.Bottom - rect.Top;
+        rect.Left = pt.X - offset.X;
+        rect.Top = pt.Y - offset.Y;
+        rect.Right = rect.Left + width;
+        rect.Bottom = rect.Top + height;
+        Marshal.StructureToPtr(rect, rectPtr, false);
+        return true;
     }
 
     /// <summary>Vrai si ce point de l'écran (pixels physiques) est sur la barre d'onglets de cette fenêtre.</summary>
