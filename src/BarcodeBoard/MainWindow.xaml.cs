@@ -477,6 +477,7 @@ public sealed partial class MainWindow : Window
         switch (e.PropertyName)
         {
             case nameof(MainViewModel.SelectedTab):
+                PointerVisibility.Show();
                 SyncSelectedTab();
                 WatchTitle();
                 break;
