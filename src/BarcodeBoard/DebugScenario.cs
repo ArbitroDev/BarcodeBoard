@@ -89,6 +89,17 @@ internal static class DebugScenario
             if (Value("--capture") is { } p) File.WriteAllLines(Path.ChangeExtension(p, ".sim.txt"), log);
         }
 
+        // Ajout d'un code une fois la fenêtre affichée (1,5 s) : avec --capture-delay, vérifie le délai avant qu'il apparaisse.
+        if (Value("--add-later") is { } later && vm.SelectedTab is { } adding)
+        {
+            window.DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, async () =>
+            {
+                await Task.Delay(1500);
+                adding.ComposerText = later;
+                adding.AddFromComposer();
+            });
+        }
+
         if (Value("--capture") is { } path)
         {
             window.DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, async () =>
