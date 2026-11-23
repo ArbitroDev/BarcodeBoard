@@ -58,6 +58,12 @@ public sealed partial class MainWindow : Window
         _hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
         AppWindows.Register(this);
 
+        // Un onglet tenu au-dessus de la fenêtre (hors bande d'onglets) y est accepté : sinon Windows affiche le
+        // panneau « interdit » sur la vignette. Événements déjà traités compris (cartes, listes, bande d'onglets).
+        Root.AllowDrop = true;
+        Root.AddHandler(UIElement.DragOverEvent, new DragEventHandler(Root_TabDragOver), true);
+        Root.AddHandler(UIElement.DropEvent, new DragEventHandler(Root_TabDrop), true);
+
         // Onglets dans la barre de titre ; Windows garde ses boutons Réduire / Agrandir / Fermer.
         ExtendsContentIntoTitleBar = true;
         AppWindow.SetIcon(IconPath);
@@ -687,6 +693,33 @@ public sealed partial class MainWindow : Window
             if (e.GetPosition(other).X < other.ActualWidth / 2) { index = i; break; }
         }
         MoveTabItem(dragged.Item, source, this, index);
+        CloseIfEmpty(source);
+        Activate();
+    });
+
+    /// <summary>
+    /// Onglet tenu au-dessus de la fenêtre : accepté partout, sans le symbole ni la légende du glisser-déposer
+    /// (comme dans l'Explorateur, seule la vignette de l'onglet suit le pointeur).
+    /// </summary>
+    private void Root_TabDragOver(object sender, DragEventArgs e)
+    {
+        if (_draggedTab is null || !e.DataView.Contains(TabDragFormat)) return;
+        e.AcceptedOperation = DataPackageOperation.Move;
+        e.DragUIOverride.IsGlyphVisible = false;
+        e.DragUIOverride.IsCaptionVisible = false;
+    }
+
+    /// <summary>
+    /// Onglet lâché sur la fenêtre hors de la bande d'onglets : dans sa propre fenêtre, rien ne change ; dans une
+    /// autre, il y entre en dernier. (Lâché sur une bande d'onglets, TabView ou <see cref="Tabs_TabStripDrop"/>
+    /// l'ont déjà traité.)
+    /// </summary>
+    private void Root_TabDrop(object sender, DragEventArgs e) => Guard(() =>
+    {
+        if (_draggedTab is not { } dragged || !e.DataView.Contains(TabDragFormat) || TabOf(dragged.Item) is not { } tab
+            || AppWindows.For(tab.Main) is not { } source || source == this) return;
+        _draggedTab = null;
+        MoveTabItem(dragged.Item, source, this, Tabs.TabItems.Count);
         CloseIfEmpty(source);
         Activate();
     });
