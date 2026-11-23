@@ -57,7 +57,11 @@ internal static class SingleInstance
     public static bool TryBecomePrimary()
     {
         _mutex = new Mutex(initiallyOwned: true, $@"Local\{Name}", out bool created);
-        return created;
+        if (created) return true;
+        // Instance secondaire : elle n'écoute jamais (le tube appartient à la première).
+        _mutex.Dispose();
+        _mutex = null;
+        return false;
     }
 
     /// <summary>Confie les fichiers à l'instance déjà ouverte (aucun fichier : elle ouvre une nouvelle fenêtre).</summary>
@@ -97,7 +101,11 @@ internal static class SingleInstance
                     var files = text.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
                     ui.TryEnqueue(() => Requested?.Invoke(files));
                 }
-                catch (IOException) { }
+                catch (IOException)
+                {
+                    // Tube momentanément indisponible : on réessaie sans occuper le processeur.
+                    await Task.Delay(250);
+                }
             }
         });
     }
