@@ -36,7 +36,7 @@ public sealed partial class MainWindow
 
     private void AddFromComposer()
     {
-        if (Tab is { } tab && !tab.AddFromComposer()) ShowToast(Loc.TypeBeforeAdd);
+        if (Tab is { } tab && !tab.AddFromComposer()) ShowToast(Loc.TypeBeforeAdd, InfoBarSeverity.Warning);
         ComposerBox.Focus(FocusState.Programmatic);
     }
 
@@ -61,9 +61,53 @@ public sealed partial class MainWindow
 
     private static CodeItemViewModel? Item(object sender) => (sender as FrameworkElement)?.DataContext as CodeItemViewModel;
 
-    private void Row_PointerPressed(object sender, PointerRoutedEventArgs e)
+    // ---- Sélection : ListView et GridView natifs, synchronisés avec le modèle ----
+    // Le modèle décide (code modifié dans la zone de saisie, code visé en mode scan) ; un clic ou le clavier dans la
+    // liste ou la grille le lui transmet. Une sélection perdue sans geste (code déplacé, onglet changé) est rétablie.
+
+    private TabViewModel? _selectionTab;
+    private bool _syncingCodeSelection;
+
+    private void WatchCodeSelection()
     {
-        if (Tab is { } tab && Item(sender) is { } item) tab.SelectedCode = item;
+        if (_selectionTab is not null) _selectionTab.PropertyChanged -= SelectionTab_PropertyChanged;
+        _selectionTab = ViewModel.SelectedTab;
+        if (_selectionTab is not null) _selectionTab.PropertyChanged += SelectionTab_PropertyChanged;
+        SyncCodeSelection();
+    }
+
+    private void SelectionTab_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(TabViewModel.SelectedCode) or nameof(TabViewModel.ScanFocus)) SyncCodeSelection();
+    }
+
+    private void SyncCodeSelection()
+    {
+        _syncingCodeSelection = true;
+        try
+        {
+            SideList.SelectedItem = Tab?.SelectedCode;
+            CodesGrid.SelectedItem = ViewModel.ScanMode ? Tab?.ScanFocus : Tab?.SelectedCode;
+        }
+        finally
+        {
+            _syncingCodeSelection = false;
+        }
+    }
+
+    private void SideList_SelectionChanged(object sender, SelectionChangedEventArgs e) => OnCodeSelectionChanged(e, inGrid: false);
+
+    private void CodesGrid_SelectionChanged(object sender, SelectionChangedEventArgs e) => OnCodeSelectionChanged(e, inGrid: true);
+
+    private void OnCodeSelectionChanged(SelectionChangedEventArgs e, bool inGrid)
+    {
+        if (_syncingCodeSelection || Tab is not { } tab) return;
+        if (e.AddedItems.FirstOrDefault() is CodeItemViewModel item)
+        {
+            if (inGrid && ViewModel.ScanMode) tab.ScanFocus = item;
+            else tab.SelectedCode = item;
+        }
+        DispatcherQueue.TryEnqueue(SyncCodeSelection);
     }
 
     private void RowText_GotFocus(object sender, RoutedEventArgs e)
@@ -175,6 +219,9 @@ public sealed partial class MainWindow
             return;
         }
         BeginDragCandidate((UIElement)sender, item, e, vertical: false);
+        // Le conteneur (GridViewItem) ne prend pas l'appui : il volerait la capture du glisser. Un simple clic
+        // sélectionne la carte au relâcher (Drag_PointerReleased).
+        e.Handled = true;
     }
 
     private void Card_DoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
@@ -204,7 +251,8 @@ public sealed partial class MainWindow
         // Le bouton est désactivé pour un code en erreur : il n'a pas d'image.
         if (Item(sender) is not { Matrix: { } matrix }) return;
         var bitmap = CodeBitmaps.ForClipboard(matrix, ViewModel.CodeSize, ViewModel.DpiScale);
-        ShowToast(Win32Clipboard.SetImage(_hwnd, bitmap) ? Loc.ImageCopied : Loc.ClipboardBusy);
+        if (Win32Clipboard.SetImage(_hwnd, bitmap)) ShowToast(Loc.ImageCopied, InfoBarSeverity.Success);
+        else ShowToast(Loc.ClipboardBusy, InfoBarSeverity.Warning);
     }
 
     private void CopyText_Click(object sender, RoutedEventArgs e)
@@ -220,8 +268,9 @@ public sealed partial class MainWindow
 
     private void CopyText(string text)
     {
-        if (string.IsNullOrEmpty(text)) { ShowToast(Loc.NothingToCopy); return; }
-        ShowToast(Win32Clipboard.SetText(_hwnd, text) ? Loc.TextCopied(text.Length > 60 ? text[..57] + "…" : text) : Loc.ClipboardBusy);
+        if (string.IsNullOrEmpty(text)) { ShowToast(Loc.NothingToCopy, InfoBarSeverity.Warning); return; }
+        if (Win32Clipboard.SetText(_hwnd, text)) ShowToast(Loc.TextCopied(text.Length > 60 ? text[..57] + "…" : text), InfoBarSeverity.Success);
+        else ShowToast(Loc.ClipboardBusy, InfoBarSeverity.Warning);
     }
 
     private void Delete_Click(object sender, RoutedEventArgs e)
@@ -419,10 +468,12 @@ public sealed partial class MainWindow
         }
     }
 
-    internal void ShowToast(string message)
+    /// <summary>Message bref (InfoBar), fermé tout seul après quelques secondes.</summary>
+    internal void ShowToast(string message, InfoBarSeverity severity = InfoBarSeverity.Informational)
     {
-        ToastText.Text = message;
-        Toast.Opacity = 1;
+        Toast.Message = message;
+        Toast.Severity = severity;
+        Toast.IsOpen = true;
         _toastTimer.Stop();
         _toastTimer.Start();
     }
@@ -430,7 +481,7 @@ public sealed partial class MainWindow
     private void HideToast()
     {
         _toastTimer.Stop();
-        Toast.Opacity = 0;
+        Toast.IsOpen = false;
     }
 
 #if DEBUG

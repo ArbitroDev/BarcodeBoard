@@ -187,12 +187,19 @@
                         <TextBlock Text="{x:Bind ViewModel.SelectedTab.CountLabel, Mode=OneWay}" Style="{StaticResource MutedText}" Margin="14,12,14,6"/>
                         <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="8,2,10,14">
                             <StackPanel>
-                                <ItemsControl x:Name="SideList" ItemsSource="{x:Bind ViewModel.SelectedTab.Codes, Mode=OneWay}">
-                                    <ItemsControl.ItemTemplate>
+                                <!-- Sélection native (ligne en cours de modification). Tab passe de ligne en ligne (Local). -->
+                                <ListView x:Name="SideList" ItemsSource="{x:Bind ViewModel.SelectedTab.Codes, Mode=OneWay}"
+                                          SelectionMode="Single" TabNavigation="Local" SelectionChanged="SideList_SelectionChanged">
+                                    <ListView.ItemContainerStyle>
+                                        <Style TargetType="ListViewItem">
+                                            <Setter Property="Padding" Value="0"/>
+                                            <Setter Property="MinHeight" Value="0"/>
+                                            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                        </Style>
+                                    </ListView.ItemContainerStyle>
+                                    <ListView.ItemTemplate>
                                         <DataTemplate x:DataType="local:CodeItemViewModel">
-                                            <Grid Margin="0,1" Background="Transparent" PointerPressed="Row_PointerPressed">
-                                                <Border CornerRadius="6" BorderThickness="1" Background="{ThemeResource RowSelectedBg}" BorderBrush="{ThemeResource RowSelectedBorder}"
-                                                        Visibility="{x:Bind IsSelected, Mode=OneWay}"/>
+                                            <Grid Margin="0,1" Background="Transparent">
                                                 <Grid Padding="0,4,4,4">
                                                     <Grid.ColumnDefinitions>
                                                         <ColumnDefinition Width="18"/>
@@ -231,13 +238,13 @@
                                                 </Grid>
                                                 <!-- Marques avant/après pendant un glisser -->
                                                 <Rectangle Height="3" RadiusX="1.5" RadiusY="1.5" Fill="{ThemeResource Accent}" VerticalAlignment="Top"
-                                                           Margin="18,-2,4,0" IsHitTestVisible="False" Visibility="{x:Bind DropBefore, Mode=OneWay}"/>
+                                                           Margin="18,0,4,0" IsHitTestVisible="False" Visibility="{x:Bind DropBefore, Mode=OneWay}"/>
                                                 <Rectangle Height="3" RadiusX="1.5" RadiusY="1.5" Fill="{ThemeResource Accent}" VerticalAlignment="Bottom"
-                                                           Margin="18,0,4,-2" IsHitTestVisible="False" Visibility="{x:Bind DropAfter, Mode=OneWay}"/>
+                                                           Margin="18,0,4,0" IsHitTestVisible="False" Visibility="{x:Bind DropAfter, Mode=OneWay}"/>
                                             </Grid>
                                         </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
+                                    </ListView.ItemTemplate>
+                                </ListView>
                                 <!-- Ligne suivante (aussi par Entrée dans une ligne), de la largeur d'une ligne de code -->
                                 <Button Margin="0,6,0,0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Click="AddRow_Click"
                                         Background="Transparent" BorderBrush="{ThemeResource DashStroke}">
@@ -356,20 +363,32 @@
                     </Border>
 
                     <!-- Grille des codes. Prend le clavier en mode scan (la douchette « tape » ce qu'elle lit).
-                         Retrait gauche de 20 : 10 de remplissage et 10 de marge de la grille. Le repère « avant » d'une carte est
-                         dessiné 10 à sa gauche : il doit rester dans le contenu, car le remplissage du ScrollViewer est découpé. -->
+                         Retrait gauche de 20 : 10 de remplissage et 10 de marge de la grille. -->
                     <ScrollViewer x:Name="CodesScroll" Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
                                   Padding="10,14,4,8" IsTabStop="True" UseSystemFocusVisuals="False" SizeChanged="CodesScroll_SizeChanged">
                         <Grid>
-                            <ItemsControl x:Name="CodesGrid" Margin="10,0,0,0" ItemsSource="{x:Bind ViewModel.SelectedTab.Codes, Mode=OneWay}">
-                                <ItemsControl.ItemsPanel>
+                            <!-- Sélection native : le code en cours de modification, ou en mode scan le code visé. Un clic sur
+                                 une carte ne lui donne pas le focus clavier (il reste dans la zone de saisie). -->
+                            <GridView x:Name="CodesGrid" Margin="10,0,0,0" ItemsSource="{x:Bind ViewModel.SelectedTab.Codes, Mode=OneWay}"
+                                      SelectionMode="Single" TabNavigation="Local" SelectionChanged="CodesGrid_SelectionChanged">
+                                <GridView.ItemContainerStyle>
+                                    <Style TargetType="GridViewItem">
+                                        <Setter Property="Margin" Value="0,0,16,16"/>
+                                        <Setter Property="Padding" Value="0"/>
+                                        <Setter Property="MinWidth" Value="0"/>
+                                        <Setter Property="MinHeight" Value="0"/>
+                                        <Setter Property="VerticalAlignment" Value="Top"/>
+                                        <Setter Property="AllowFocusOnInteraction" Value="False"/>
+                                    </Style>
+                                </GridView.ItemContainerStyle>
+                                <GridView.ItemsPanel>
                                     <ItemsPanelTemplate>
                                         <controls:WrapPanel/>
                                     </ItemsPanelTemplate>
-                                </ItemsControl.ItemsPanel>
-                                <ItemsControl.ItemTemplate>
+                                </GridView.ItemsPanel>
+                                <GridView.ItemTemplate>
                                     <DataTemplate x:DataType="local:CodeItemViewModel">
-                                        <Grid Margin="0,0,16,16" VerticalAlignment="Top">
+                                        <Grid>
                                             <Border Background="{ThemeResource CardBg}" BorderBrush="{ThemeResource Line}" BorderThickness="1" CornerRadius="8"
                                                     Padding="14,14,14,10" MinWidth="170"
                                                     PointerPressed="Card_PointerPressed" PointerMoved="Drag_PointerMoved" PointerReleased="Drag_PointerReleased"
@@ -406,7 +425,7 @@
                                                     </Grid>
                                                     <!-- Texte : un clic le copie. Masqué sans changer la taille de la carte quand le code est flouté. -->
                                                     <Button Style="{StaticResource SubtleButtonStyle}" Margin="0,6,0,0" Padding="6,2,6,3" HorizontalAlignment="Center"
-                                                            Click="CopyText_Click" ToolTipService.ToolTip="{x:Bind local:Loc.CopyTextTip}" controls:PointerCursor.Shape="Hand"
+                                                            Click="CopyText_Click" ToolTipService.ToolTip="{x:Bind local:Loc.CopyTextTip}"
                                                             Opacity="{x:Bind DetailsOpacity, Mode=OneWay}" IsHitTestVisible="{x:Bind NotBlurred, Mode=OneWay}">
                                                         <TextBlock Text="{x:Bind Text, Mode=OneWay}" FontFamily="{StaticResource Mono}" FontSize="12.5"
                                                                    TextWrapping="Wrap" TextAlignment="Center" MaxWidth="280"/>
@@ -434,16 +453,16 @@
                                             </Border>
                                             <Border BorderBrush="{ThemeResource CardBlurBorder}" BorderThickness="1" CornerRadius="8" IsHitTestVisible="False"
                                                     Visibility="{x:Bind IsBlurred, Mode=OneWay}"/>
-                                            <Border BorderBrush="{ThemeResource Accent}" BorderThickness="2" CornerRadius="9" Margin="-1" IsHitTestVisible="False"
-                                                    Visibility="{x:Bind ShowRing, Mode=OneWay}"/>
+                                            <!-- Marques avant/après pendant un glisser, sur le bord de la carte : hors de son conteneur
+                                                 (GridViewItem), elles pourraient être découpées -->
                                             <Rectangle Width="3" RadiusX="1.5" RadiusY="1.5" Fill="{ThemeResource Accent}" HorizontalAlignment="Left"
-                                                       Margin="-10,8,0,8" IsHitTestVisible="False" Visibility="{x:Bind DropBefore, Mode=OneWay}"/>
+                                                       Margin="0,8,0,8" IsHitTestVisible="False" Visibility="{x:Bind DropBefore, Mode=OneWay}"/>
                                             <Rectangle Width="3" RadiusX="1.5" RadiusY="1.5" Fill="{ThemeResource Accent}" HorizontalAlignment="Right"
-                                                       Margin="0,8,-10,8" IsHitTestVisible="False" Visibility="{x:Bind DropAfter, Mode=OneWay}"/>
+                                                       Margin="0,8,0,8" IsHitTestVisible="False" Visibility="{x:Bind DropAfter, Mode=OneWay}"/>
                                         </Grid>
                                     </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
+                                </GridView.ItemTemplate>
+                            </GridView>
                             <TextBlock Text="{x:Bind local:Loc.EmptyTab}" Foreground="{ThemeResource Muted}" FontSize="14" HorizontalAlignment="Center"
                                        Margin="0,40,16,0" Visibility="{x:Bind ViewModel.SelectedTab.IsEmpty, Mode=OneWay}"/>
                         </Grid>
@@ -462,7 +481,7 @@
             <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
                 <controls:PixelImage x:Name="FullImage" HorizontalAlignment="Center" HidesPointer="True"/>
                 <Button Style="{StaticResource SubtleButtonStyle}" Margin="0,14,0,0" HorizontalAlignment="Center" Click="CopyFullText_Click"
-                        ToolTipService.ToolTip="{x:Bind local:Loc.CopyTextTip}" controls:PointerCursor.Shape="Hand">
+                        ToolTipService.ToolTip="{x:Bind local:Loc.CopyTextTip}">
                     <TextBlock x:Name="FullText" FontFamily="{StaticResource Mono}" FontSize="18" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="900"/>
                 </Button>
             </StackPanel>
@@ -475,12 +494,8 @@
         </Grid>
 
         <!-- ===================== Message temporaire ===================== -->
-        <Border x:Name="Toast" Grid.RowSpan="2" VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="0,0,0,22"
-                Background="{ThemeResource ToastBg}" CornerRadius="6" Padding="14,9" Opacity="0" IsHitTestVisible="False">
-            <Border.OpacityTransition>
-                <ScalarTransition Duration="0:0:0.16"/>
-            </Border.OpacityTransition>
-            <TextBlock x:Name="ToastText" Foreground="{ThemeResource ToastFg}" FontSize="13"/>
-        </Border>
+        <!-- Par-dessus le contenu, en bas : les codes ne bougent pas quand un message apparaît -->
+        <InfoBar x:Name="Toast" Grid.RowSpan="2" VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="20,0,20,22" MaxWidth="640"
+                 IsClosable="False" IsHitTestVisible="False"/>
     </Grid>
 </Window>

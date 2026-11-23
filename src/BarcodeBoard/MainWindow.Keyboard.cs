@@ -74,6 +74,7 @@ public sealed partial class MainWindow
     private void OnScanModeChanged()
     {
         _scan.Clear();
+        SyncCodeSelection();
         if (ViewModel.ScanMode)
         {
             CommitPendingRenames();
