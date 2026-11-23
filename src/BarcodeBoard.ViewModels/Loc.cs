@@ -125,4 +125,5 @@ public static class Loc
                                                  "If you don't save, changes to this tab will be lost.");
     public static string DontSave => T("Ne pas enregistrer", "Don't save");
     public static string Cancel => T("Annuler", "Cancel");
+    public static string Ok => "OK";
 }

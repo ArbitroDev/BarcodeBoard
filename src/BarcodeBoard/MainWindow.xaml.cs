@@ -33,7 +33,9 @@ public sealed partial class MainWindow : Window
     private readonly IReadOnlyList<string> _startupFiles;
     private readonly bool _isFirst, _mica;
     private readonly IntPtr _hwnd;
-    private bool _syncingTabs, _closeConfirmed, _skipPrompts, _settingsSaved, _themeTilesSyncing;
+    private bool _syncingTabs, _closeConfirmed, _closePrompting, _skipPrompts, _settingsSaved, _themeTilesSyncing;
+    /// <summary>Onglets dont la fermeture est en cours (question affichée) : Ctrl+W répété ne les ferme pas deux fois.</summary>
+    private readonly HashSet<TabViewModel> _closingTabs = [];
     private TabViewModel? _titleTab;
     private ScrollViewer? _tabScroller;
 
@@ -320,13 +322,23 @@ public sealed partial class MainWindow : Window
     {
         if (!_closeConfirmed)
         {
+            // Fermeture redemandée (bouton Fermer, Alt+F4) pendant les questions : la première série suffit.
+            if (_closePrompting) { e.Cancel = true; return; }
             CommitPendingRenames();
             var dirty = ViewModel.Tabs.Where(t => t.IsDirty).ToList();
             if (dirty.Count > 0 && !_skipPrompts)
             {
                 e.Cancel = true;
-                foreach (var tab in dirty)
-                    if (!await ConfirmSave(tab)) return;
+                _closePrompting = true;
+                try
+                {
+                    foreach (var tab in dirty)
+                        if (ViewModel.Tabs.Contains(tab) && !await ConfirmSave(tab)) return;
+                }
+                finally
+                {
+                    _closePrompting = false;
+                }
                 _closeConfirmed = true;
                 SaveWindowSettings();
                 Close();
@@ -521,7 +533,15 @@ public sealed partial class MainWindow : Window
     private async Task<bool> CloseTab(TabViewModel tab)
     {
         CommitPendingRenames();
-        if (tab.IsDirty && !await ConfirmSave(tab)) return false;
+        if (!ViewModel.Tabs.Contains(tab) || !_closingTabs.Add(tab)) return false;
+        try
+        {
+            if (tab.IsDirty && !await ConfirmSave(tab)) return false;
+        }
+        finally
+        {
+            _closingTabs.Remove(tab);
+        }
         if (!ViewModel.Tabs.Contains(tab)) return false; // parti dans une autre fenêtre pendant la question
         int index = ViewModel.Tabs.IndexOf(tab);
         bool wasSelected = tab == Tab;

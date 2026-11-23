@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 
@@ -5,9 +6,22 @@ namespace BarcodeBoard;
 
 public enum UnsavedChoice { Save, Discard, Cancel }
 
-/// <summary>Boîtes de dialogue de WinUI (ContentDialog), dans le thème de la fenêtre.</summary>
+/// <summary>
+/// Boîtes de dialogue de WinUI (ContentDialog), dans le thème de la fenêtre. WinUI n'en ouvre qu'une à la fois
+/// par fenêtre : les suivantes attendent leur tour (plusieurs fichiers invalides, erreur pendant une question…).
+/// </summary>
 internal static class Dialogs
 {
+    private static readonly ConditionalWeakTable<XamlRoot, SemaphoreSlim> Turns = [];
+
+    private static async Task<ContentDialogResult> ShowInTurn(ContentDialog dialog)
+    {
+        var turn = Turns.GetValue(dialog.XamlRoot, _ => new SemaphoreSlim(1, 1));
+        await turn.WaitAsync();
+        try { return await dialog.ShowAsync(); }
+        finally { turn.Release(); }
+    }
+
     /// <summary>« Enregistrer les modifications de X ? » avec Enregistrer / Ne pas enregistrer / Annuler.</summary>
     public static async Task<UnsavedChoice> AskUnsaved(FrameworkElement root, string tabName)
     {
@@ -16,7 +30,7 @@ internal static class Dialogs
         dialog.SecondaryButtonText = Loc.DontSave;
         dialog.CloseButtonText = Loc.Cancel;
         dialog.DefaultButton = ContentDialogButton.Primary;
-        return await dialog.ShowAsync() switch
+        return await ShowInTurn(dialog) switch
         {
             ContentDialogResult.Primary => UnsavedChoice.Save,
             ContentDialogResult.Secondary => UnsavedChoice.Discard,
@@ -28,9 +42,9 @@ internal static class Dialogs
     public static async Task Show(FrameworkElement root, string title, string message)
     {
         var dialog = Create(root, title, message);
-        dialog.CloseButtonText = "OK";
+        dialog.CloseButtonText = Loc.Ok;
         dialog.DefaultButton = ContentDialogButton.Close;
-        await dialog.ShowAsync();
+        await ShowInTurn(dialog);
     }
 
     private static ContentDialog Create(FrameworkElement root, string title, string message) => new()
