@@ -1,5 +1,7 @@
+using System.Reflection;
 using System.Runtime.InteropServices;
 using Microsoft.UI.Input;
+using Microsoft.UI.Xaml;
 
 namespace BarcodeBoard.Controls;
 
@@ -9,13 +11,28 @@ namespace BarcodeBoard.Controls;
 /// d'effet, et WinUI n'a pas de forme « aucun ». Le curseur masqué est donc un curseur Win32 transparent,
 /// confié à WinUI par son interface d'interopérabilité.
 /// </summary>
-internal static class PointerCursor
+public static class PointerCursor
 {
+    /// <summary>
+    /// Forme du curseur au-dessus d'un élément (XAML : <c>controls:PointerCursor.Shape="SizeWestEast"</c>).
+    /// <c>ProtectedCursor</c> n'est accessible qu'aux classes dérivées : il est posé par réflexion.
+    /// </summary>
+    public static readonly DependencyProperty ShapeProperty = DependencyProperty.RegisterAttached(
+        "Shape", typeof(InputSystemCursorShape), typeof(PointerCursor),
+        new PropertyMetadata(InputSystemCursorShape.Arrow, (d, e) =>
+            ProtectedCursorProperty.SetValue(d, InputSystemCursor.Create((InputSystemCursorShape)e.NewValue))));
+
+    public static InputSystemCursorShape GetShape(UIElement element) => (InputSystemCursorShape)element.GetValue(ShapeProperty);
+    public static void SetShape(UIElement element, InputSystemCursorShape value) => element.SetValue(ShapeProperty, value);
+
+    private static readonly PropertyInfo ProtectedCursorProperty =
+        typeof(UIElement).GetProperty("ProtectedCursor", BindingFlags.Instance | BindingFlags.NonPublic)!;
+
     private static InputCursor? _hidden;
     private static bool _hiddenFailed;
 
     /// <summary>Curseur invisible ; null s'il n'a pas pu être créé (le pointeur reste alors visible).</summary>
-    public static InputCursor? Hidden
+    internal static InputCursor? Hidden
     {
         get
         {

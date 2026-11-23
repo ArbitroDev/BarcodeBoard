@@ -202,7 +202,7 @@
                                                         <ColumnDefinition Width="Auto"/>
                                                     </Grid.ColumnDefinitions>
                                                     <!-- Poignée : glisser pour déplacer le code -->
-                                                    <Border Background="Transparent" ToolTipService.ToolTip="{x:Bind local:Loc.DragToMove}"
+                                                    <Border Background="Transparent" ToolTipService.ToolTip="{x:Bind local:Loc.DragToMove}" controls:PointerCursor.Shape="SizeAll"
                                                             PointerPressed="Grip_PointerPressed" PointerMoved="Drag_PointerMoved" PointerReleased="Drag_PointerReleased"
                                                             PointerCaptureLost="Drag_PointerCaptureLost">
                                                         <PathIcon Width="16" Height="16" VerticalAlignment="Center" Foreground="{ThemeResource Tertiary}" Data="M5.4,3.4 h1.2 v1.2 h-1.2 Z M9.4,3.4 h1.2 v1.2 h-1.2 Z M5.4,7.4 h1.2 v1.2 h-1.2 Z M9.4,7.4 h1.2 v1.2 h-1.2 Z M5.4,11.4 h1.2 v1.2 h-1.2 Z M9.4,11.4 h1.2 v1.2 h-1.2 Z"/>
@@ -259,6 +259,7 @@
 
                 <!-- Poignée pour élargir ou rétrécir la liste (WinUI n'a pas de GridSplitter) -->
                 <Border x:Name="SideSplitter" Width="6" Margin="0,0,-3,0" HorizontalAlignment="Right" Background="Transparent"
+                        controls:PointerCursor.Shape="SizeWestEast"
                         Visibility="{x:Bind ViewModel.SideOpen, Mode=OneWay}" ToolTipService.ToolTip="{x:Bind local:Loc.ResizeListTip}"
                         PointerEntered="Splitter_PointerEntered" PointerExited="Splitter_PointerExited" PointerPressed="Splitter_PointerPressed"
                         PointerMoved="Splitter_PointerMoved" PointerReleased="Splitter_PointerReleased" PointerCaptureLost="Splitter_PointerCaptureLost">
@@ -403,7 +404,7 @@
                                                     </Grid>
                                                     <!-- Texte : un clic le copie. Masqué sans changer la taille de la carte quand le code est flouté. -->
                                                     <Button Style="{StaticResource SubtleButtonStyle}" Margin="0,6,0,0" Padding="6,2,6,3" HorizontalAlignment="Center"
-                                                            Click="CopyText_Click" ToolTipService.ToolTip="{x:Bind local:Loc.CopyTextTip}"
+                                                            Click="CopyText_Click" ToolTipService.ToolTip="{x:Bind local:Loc.CopyTextTip}" controls:PointerCursor.Shape="Hand"
                                                             Opacity="{x:Bind DetailsOpacity, Mode=OneWay}" IsHitTestVisible="{x:Bind NotBlurred, Mode=OneWay}">
                                                         <TextBlock Text="{x:Bind Text, Mode=OneWay}" FontFamily="{StaticResource Mono}" FontSize="12.5"
                                                                    TextWrapping="Wrap" TextAlignment="Center" MaxWidth="280"/>
@@ -459,7 +460,7 @@
             <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
                 <controls:PixelImage x:Name="FullImage" HorizontalAlignment="Center" HidesPointer="True"/>
                 <Button Style="{StaticResource SubtleButtonStyle}" Margin="0,14,0,0" HorizontalAlignment="Center" Click="CopyFullText_Click"
-                        ToolTipService.ToolTip="{x:Bind local:Loc.CopyTextTip}">
+                        ToolTipService.ToolTip="{x:Bind local:Loc.CopyTextTip}" controls:PointerCursor.Shape="Hand">
                     <TextBlock x:Name="FullText" FontFamily="{StaticResource Mono}" FontSize="18" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="900"/>
                 </Button>
             </StackPanel>
