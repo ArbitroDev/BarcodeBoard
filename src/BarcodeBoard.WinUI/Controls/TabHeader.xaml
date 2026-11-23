@@ -1,0 +1,17 @@
+<UserControl x:Class="BarcodeBoard.Controls.TabHeader"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             DoubleTapped="OnDoubleTapped">
+    <!-- En-tête d'un onglet : nom, point « modifié », zone de renommage (double-clic).
+         Il suit son onglet d'une fenêtre à l'autre : sa fenêtre est retrouvée à chaque action (AppWindows). -->
+    <Grid ToolTipService.ToolTip="{x:Bind Tab.ToolTip, Mode=OneWay}" Background="Transparent">
+        <StackPanel Orientation="Horizontal" Visibility="{x:Bind Tab.NotRenaming, Mode=OneWay}">
+            <TextBlock Text="{x:Bind Tab.Name, Mode=OneWay}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" MaxWidth="220"/>
+            <Ellipse Width="7" Height="7" Margin="8,1,0,0" Fill="{ThemeResource Muted}" VerticalAlignment="Center"
+                     Visibility="{x:Bind Tab.IsDirty, Mode=OneWay}"/>
+        </StackPanel>
+        <TextBox x:Name="RenameBox" Visibility="{x:Bind Tab.IsRenaming, Mode=OneWay}" MinWidth="120" Height="28" Padding="6,3"
+                 Text="{x:Bind Tab.RenameText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                 PreviewKeyDown="RenameBox_PreviewKeyDown" LostFocus="RenameBox_LostFocus"/>
+    </Grid>
+</UserControl>
