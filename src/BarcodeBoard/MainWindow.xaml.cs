@@ -48,7 +48,7 @@ public sealed partial class MainWindow : Window
     /// <param name="startupFiles">Fichiers .codes à ouvrir une fois la fenêtre affichée.</param>
     /// <param name="adopted">Onglet sorti d'une autre fenêtre : la nouvelle fenêtre ne contient que lui.</param>
     /// <param name="isFirst">Première fenêtre de l'application : elle reprend la position et l'état enregistrés.</param>
-    /// <param name="tearOut">Fenêtre demandée par TabView pendant un arrachage : vide, placée et affichée par TabView.</param>
+    /// <param name="tearOut">Fenêtre demandée par TabView pour un arrachage possible : vide, placée et affichée par TabView.</param>
     public MainWindow(IReadOnlyList<string>? startupFiles = null, TabViewModel? adopted = null, bool isFirst = false, bool tearOut = false)
     {
         _startupFiles = startupFiles ?? [];
@@ -61,6 +61,10 @@ public sealed partial class MainWindow : Window
         // Onglets dans la barre de titre ; Windows garde ses boutons Réduire / Agrandir / Fermer.
         ExtendsContentIntoTitleBar = true;
         AppWindow.SetIcon(IconPath);
+        // TabView demande cette fenêtre dès qu'on appuie sur un onglet (le geste peut devenir un arrachage), l'affiche
+        // un instant cachée derrière l'autre, puis la ferme si l'onglet ne sort pas : elle ne doit pas apparaître dans
+        // la barre des tâches. Elle y entre si l'onglet est vraiment arraché (Tabs_TabTearOutRequested).
+        if (tearOut) AppWindow.IsShownInSwitchers = false;
 
         // Mica Alt (Windows 11), le matériau des applications à onglets ; Windows 10 garde un fond opaque.
         _mica = !NoMicaRequested() && MicaController.IsSupported();
@@ -622,6 +626,7 @@ public sealed partial class MainWindow : Window
         var target = _tearOutWindow ?? AppWindows.For(args.NewWindowId);
         _tearOutWindow = null;
         if (target is null) return;
+        target.AppWindow.IsShownInSwitchers = true;
         foreach (var item in args.Tabs.OfType<TabViewItem>())
         {
             var source = TabOf(item) is { } tab ? AppWindows.For(tab.Main) : null;
