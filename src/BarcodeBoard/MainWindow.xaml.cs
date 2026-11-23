@@ -394,14 +394,20 @@ public sealed partial class MainWindow : Window
         return null;
     }
 
-    // ---- Clic droit sur un onglet ----
-    // Pour l'arrachage, TabView déclare la bande d'onglets comme barre de titre : Windows y traite le clic droit
-    // lui-même et ouvre le menu système (Restaurer, Déplacer…) au lieu du menu de l'onglet. Les messages de la
-    // fenêtre sont donc lus avant Windows : un clic droit sur un onglet ouvre son menu ; ailleurs dans la barre de
-    // titre, le menu système reste.
+    // ---- Clics sur un onglet ----
+    // Pour l'arrachage, TabView déclare la bande d'onglets comme barre de titre : Windows y traite les clics
+    // lui-même. Les messages de la fenêtre sont donc lus avant Windows :
+    // - clic droit sur un onglet : son menu, au lieu du menu système (Restaurer, Déplacer…), qui reste ailleurs
+    //   dans la barre de titre ;
+    // - appui gauche sur un onglet : TabView démarre à chaque appui un glisser de barre de titre (fenêtre
+    //   d'arrachage créée, largeur des onglets figée), que Windows ne termine pas sur un simple clic : TabView
+    //   restait bloqué en « glisser en cours », sans plus jamais recalculer la largeur des onglets. Le glisser ne
+    //   lui est donc transmis qu'une fois le pointeur déplacé (DragDetect) ; un simple clic sélectionne l'onglet.
 
     private const int GWLP_WNDPROC = -4;
-    private const uint WM_CONTEXTMENU = 0x007B, WM_NCDESTROY = 0x0082, WM_NCRBUTTONDOWN = 0x00A4, WM_NCRBUTTONUP = 0x00A5;
+    private const uint WM_CONTEXTMENU = 0x007B, WM_NCDESTROY = 0x0082, WM_NCLBUTTONDOWN = 0x00A1,
+        WM_NCRBUTTONDOWN = 0x00A4, WM_NCRBUTTONUP = 0x00A5;
+    private const int HTCAPTION = 2;
 
     private delegate IntPtr WindowProc(IntPtr hwnd, uint message, IntPtr wParam, IntPtr lParam);
     private WindowProc? _windowProc;
@@ -417,6 +423,15 @@ public sealed partial class MainWindow : Window
     {
         switch (message)
         {
+            case WM_NCLBUTTONDOWN when wParam == HTCAPTION:
+            {
+                var pressed = new PointInt32((short)(lParam.ToInt64() & 0xFFFF), (short)((lParam.ToInt64() >> 16) & 0xFFFF));
+                if (TabAtScreenPoint(pressed) is not { } pressedTab || IsOverCloseButton(pressedTab.Item, pressed)) break;
+                // Le pointeur a bougé avant d'être relâché : glisser (réordonner, arracher), confié à TabView.
+                if (DragDetect(hwnd, new Native.POINT { X = pressed.X, Y = pressed.Y })) break;
+                Tabs.SelectedItem = pressedTab.Item;
+                return IntPtr.Zero;
+            }
             case WM_NCRBUTTONDOWN or WM_NCRBUTTONUP or WM_CONTEXTMENU when lParam != -1:
                 // Coordonnées d'écran signées (écran à gauche ou au-dessus du principal) dans lParam.
                 var point = new PointInt32((short)(lParam.ToInt64() & 0xFFFF), (short)((lParam.ToInt64() >> 16) & 0xFFFF));
@@ -435,6 +450,29 @@ public sealed partial class MainWindow : Window
         }
         return CallWindowProc(_previousWindowProc, hwnd, message, wParam, lParam);
     }
+
+    /// <summary>La croix de l'onglet garde son fonctionnement d'origine.</summary>
+    private bool IsOverCloseButton(TabViewItem item, PointInt32 point)
+    {
+        if (Root.XamlRoot is not { } root || FindNamed(item, "CloseButton") is not { } button) return false;
+        var r = root.CoordinateConverter.ConvertLocalToScreen(
+            button.TransformToVisual(null).TransformBounds(new Windows.Foundation.Rect(0, 0, button.ActualWidth, button.ActualHeight)));
+        return point.X >= r.X && point.X < r.X + r.Width && point.Y >= r.Y && point.Y < r.Y + r.Height;
+    }
+
+    private static FrameworkElement? FindNamed(DependencyObject parent, string name)
+    {
+        for (int i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
+        {
+            var child = VisualTreeHelper.GetChild(parent, i);
+            if (child is FrameworkElement { Name: var n } element && n == name) return element;
+            if (FindNamed(child, name) is { } found) return found;
+        }
+        return null;
+    }
+
+    [DllImport("user32.dll")]
+    private static extern bool DragDetect(IntPtr hwnd, Native.POINT point);
 
     [DllImport("user32.dll", EntryPoint = "SetWindowLongPtrW")]
     private static extern IntPtr SetWindowLongPtr(IntPtr hwnd, int index, IntPtr value);
