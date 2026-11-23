@@ -2,6 +2,7 @@ using System.Collections.Specialized;
 using System.ComponentModel;
 using Microsoft.UI;
 using Microsoft.UI.Composition.SystemBackdrops;
+using Microsoft.UI.Input;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -40,6 +41,12 @@ public sealed partial class MainWindow : Window
     private TabViewModel? _titleTab;
     /// <summary>Fenêtre créée pour l'arrachage en cours (TabTearOutWindowRequested), en attente de son onglet.</summary>
     private MainWindow? _tearOutWindow;
+
+    /// <summary>Point de l'onglet saisi au début du glisser (pixels physiques depuis son coin haut gauche).</summary>
+    private static PointInt32? _tabGrab;
+    /// <summary>Onglet arraché pendant le glisser en cours, et la fenêtre qui l'emporte sous le pointeur.</summary>
+    private static (TabViewItem Item, MainWindow Window)? _tornOut;
+    private bool _windowRectHooked;
 
     public MainViewModel ViewModel { get; } = new();
 
@@ -142,6 +149,9 @@ public sealed partial class MainWindow : Window
         SetTitleBar(CustomDragRegion);
         CustomDragRegion.MinWidth = 188;
         UpdateTabStripPadding();
+        var nonClient = InputNonClientPointerSource.GetForWindowId(AppWindow.Id);
+        nonClient.EnteringMoveSize += OnEnteringMoveSize;
+        nonClient.ExitedMoveSize += (_, _) => { _tabGrab = null; _tornOut = null; };
         ViewModel.DpiScale = Root.XamlRoot.RasterizationScale;
         Root.XamlRoot.Changed += (_, _) =>
         {
@@ -646,9 +656,56 @@ public sealed partial class MainWindow : Window
         {
             var source = TabOf(item) is { } tab ? AppWindows.For(tab.Main) : null;
             MoveTabItem(item, source, target, target.Tabs.TabItems.Count);
+            _tornOut = (item, target);
         }
         CloseIfEmpty(this);
     });
+
+    /// <summary>
+    /// Début d'un glisser dans la barre de titre : le point saisi de l'onglet est noté, pour le garder sous le
+    /// pointeur s'il est arraché (OnWindowRectChanging).
+    /// </summary>
+    private void OnEnteringMoveSize(InputNonClientPointerSource sender, EnteringMoveSizeEventArgs args)
+    {
+        _tabGrab = null;
+        _tornOut = null;
+        // Abonnement au premier glisser : après celui de TabView (pris au chargement), pour corriger sa position.
+        if (!_windowRectHooked)
+        {
+            sender.WindowRectChanging += OnWindowRectChanging;
+            _windowRectHooked = true;
+        }
+        if (args.MoveSizeOperation != MoveSizeOperation.Move || Root.XamlRoot is not { } root) return;
+        var pointer = args.PointerScreenPoint;
+        foreach (var item in Tabs.TabItems.OfType<TabViewItem>())
+        {
+            var r = root.CoordinateConverter.ConvertLocalToScreen(
+                item.TransformToVisual(null).TransformBounds(new Windows.Foundation.Rect(0, 0, item.ActualWidth, item.ActualHeight)));
+            if (pointer.X < r.X || pointer.X >= r.X + r.Width) continue;
+            // Saisi dans la marge au-dessus des onglets : le point est ramené sur l'onglet.
+            _tabGrab = new PointInt32(pointer.X - r.X, Math.Clamp(pointer.Y - r.Y, 0, Math.Max(0, r.Height - 1)));
+            return;
+        }
+    }
+
+    /// <summary>
+    /// La fenêtre placée par TabView ne gardait pas l'onglet arraché sous le pointeur. Elle est placée pour que le
+    /// point saisi de l'onglet y reste ; tant que la nouvelle fenêtre n'est pas mise en page, TabView décide.
+    /// </summary>
+    private void OnWindowRectChanging(InputNonClientPointerSource sender, WindowRectChangingEventArgs args)
+    {
+        if (_tornOut is not { } tornOut || _tabGrab is not { } grab) return;
+        var (item, window) = tornOut;
+        // Onglet fusionné dans une autre fenêtre entre-temps : TabView reprend la main.
+        if (ParentTabView(item) != window.Tabs || item.XamlRoot is not { } root || item.ActualWidth <= 0) return;
+        var tab = root.CoordinateConverter.ConvertLocalToScreen(item.TransformToVisual(null).TransformPoint(new Windows.Foundation.Point(0, 0)));
+        var position = window.AppWindow.Position;
+        var pointer = args.PointerScreenPoint;
+        var rect = args.NewWindowRect;
+        rect.X = position.X + (pointer.X - grab.X - tab.X);
+        rect.Y = position.Y + (pointer.Y - grab.Y - tab.Y);
+        args.NewWindowRect = rect;
+    }
 
     private void Tabs_ExternalTornOutTabsDropping(TabView sender, TabViewExternalTornOutTabsDroppingEventArgs args) =>
         args.AllowDrop = true;
