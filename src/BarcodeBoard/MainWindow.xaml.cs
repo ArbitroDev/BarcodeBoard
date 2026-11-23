@@ -279,18 +279,25 @@ public sealed partial class MainWindow : Window
     {
         if (!_closeConfirmed)
         {
-            // Fermeture redemandée (bouton Fermer, Alt+F4) pendant les questions : la première série suffit.
-            if (_closePrompting) { e.Cancel = true; return; }
+            // Fermeture redemandée (bouton Fermer, Alt+F4) pendant les questions : la première série suffit. Pendant
+            // la question d'un onglet qu'on ferme (Ctrl+W), elle est ignorée : sinon la même question reviendrait.
+            if (_closePrompting || _closingTabs.Count > 0) { e.Cancel = true; return; }
             CommitPendingRenames();
-            var dirty = ViewModel.Tabs.Where(t => t.IsDirty).ToList();
-            if (dirty.Count > 0 && !_skipPrompts)
+            var asked = new HashSet<TabViewModel>();
+            // Liste relue après chaque réponse : un onglet arrivé (glissé d'une autre fenêtre) ou modifié pendant les
+            // questions est demandé lui aussi, jamais fermé en silence.
+            TabViewModel? NextToAsk() => ViewModel.Tabs.FirstOrDefault(t => t.IsDirty && !asked.Contains(t));
+            if (!_skipPrompts && NextToAsk() is not null)
             {
                 e.Cancel = true;
                 _closePrompting = true;
                 try
                 {
-                    foreach (var tab in dirty)
-                        if (ViewModel.Tabs.Contains(tab) && !await ConfirmSave(tab)) return;
+                    while (NextToAsk() is { } tab)
+                    {
+                        asked.Add(tab);
+                        if (!await ConfirmSave(tab)) return;
+                    }
                 }
                 finally
                 {
@@ -520,7 +527,8 @@ public sealed partial class MainWindow : Window
     private async Task<bool> CloseTab(TabViewModel tab)
     {
         CommitPendingRenames();
-        if (!ViewModel.Tabs.Contains(tab) || !_closingTabs.Add(tab)) return false;
+        // Pendant les questions de fermeture de la fenêtre, l'onglet y passe déjà : pas de deuxième question.
+        if (_closePrompting || !ViewModel.Tabs.Contains(tab) || !_closingTabs.Add(tab)) return false;
         try
         {
             if (tab.IsDirty && !await ConfirmSave(tab)) return false;
