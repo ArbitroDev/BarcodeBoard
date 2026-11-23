@@ -89,6 +89,7 @@ internal static class SingleInstance
         if (_mutex is null) return;
         Task.Run(async () =>
         {
+            bool logged = false;
             while (true)
             {
                 try
@@ -105,6 +106,14 @@ internal static class SingleInstance
                 {
                     // Tube momentanément indisponible : on réessaie sans occuper le processeur.
                     await Task.Delay(250);
+                }
+                catch (Exception ex)
+                {
+                    // Toute autre erreur (nom du tube refusé…) ne doit pas arrêter l'écoute en silence : sans elle, les
+                    // lancements suivants ouvriraient une deuxième instance. Notée une fois, puis nouvel essai.
+                    if (!logged) AppSettings.LogError(ex);
+                    logged = true;
+                    await Task.Delay(2000);
                 }
             }
         });
