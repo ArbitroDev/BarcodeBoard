@@ -1,7 +1,4 @@
-﻿using System.IO;
-using System.Windows;
-using System.Windows.Threading;
-using BarcodeBoard.Core;
+using Microsoft.UI.Xaml;
 
 namespace BarcodeBoard;
 
@@ -9,54 +6,48 @@ public partial class App : Application
 {
     public App()
     {
-#if DEBUG
-        // Vérifications : --lang en ou --lang fr force la langue au lieu de suivre Windows.
-        var args = Environment.GetCommandLineArgs();
-        int i = Array.IndexOf(args, "--lang");
-        if (i >= 0 && i + 1 < args.Length) Core.Lang.French = args[i + 1] == "fr";
-#endif
-        DispatcherUnhandledException += OnUnhandledException;
+        InitializeComponent();
+        UnhandledException += OnUnhandledException;
     }
 
-    protected override void OnStartup(StartupEventArgs e)
+    protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
-        base.OnStartup(e);
-        // Fichiers .codes passés au lancement : double-clic dans l'Explorateur, glisser sur l'icône.
-        var files = e.Args
-            .Where(a => !a.StartsWith("--") && File.Exists(a)
-                        && string.Equals(Path.GetExtension(a), CodesFile.Extension, StringComparison.OrdinalIgnoreCase))
-            .Select(Path.GetFullPath)
-            .ToList();
-
-        // Les options de vérification (--demo, --capture…) lancent une instance à part, sans déranger celle ouverte.
-        bool checkRun = e.Args.Any(a => a.StartsWith("--"));
-        if (!checkRun && !SingleInstance.TryBecomePrimary(AppWindows.HandleRequest) && SingleInstance.SendToPrimary(files))
-        {
-            Shutdown();
-            return;
-        }
-
-        new MainWindow(startupFiles: files, isFirst: true).Show();
+        new MainWindow(startupFiles: Program.StartupFiles, isFirst: true).ShowFirst();
+        // Lancements suivants (double-clic sur un .codes…) : leurs fichiers arrivent ici.
+        SingleInstance.Requested += AppWindows.HandleRequest;
+        SingleInstance.Listen(Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread());
     }
 
     /// <summary>
     /// Filet de sécurité : une erreur imprévue est signalée et notée dans un journal, mais l'application reste
     /// ouverte, pour ne pas perdre les onglets non enregistrés.
     /// </summary>
-    private void OnUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
+    private void OnUnhandledException(object sender, Microsoft.UI.Xaml.UnhandledExceptionEventArgs e)
     {
-        try
-        {
-            var log = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "BarcodeBoard", "errors.log");
-            Directory.CreateDirectory(Path.GetDirectoryName(log)!);
-            File.AppendAllText(log, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss}  {e.Exception}{Environment.NewLine}{Environment.NewLine}");
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
-
         e.Handled = true;
-        var owner = AppWindows.LastActive is { IsLoaded: true } w ? w : null;
+        AppSettings.LogError(e.Exception);
         var message = Loc.UnexpectedError(e.Exception.Message);
-        if (owner is null) MessageBox.Show(message, Loc.AppName, MessageBoxButton.OK, MessageBoxImage.Error);
-        else MessageBox.Show(owner, message, Loc.AppName, MessageBoxButton.OK, MessageBoxImage.Error);
+        if (AppWindows.LastActive is { } window && window.Content is FrameworkElement root && root.XamlRoot is not null)
+        {
+            ShowError(root, message);
+            return;
+        }
+        // Aucune fenêtre prête (erreur au démarrage…) : message de Windows, qui n'a besoin d'aucune fenêtre.
+        ShowNativeError(message);
+        // Sans aucune fenêtre, rien à préserver : l'application s'arrête au lieu de rester ouverte, invisible.
+        if (AppWindows.All.Count == 0) Exit();
     }
+
+    private static async void ShowError(FrameworkElement root, string message)
+    {
+        try { await Dialogs.Show(root, Loc.AppName, message); }
+        catch (Exception ex)
+        {
+            AppSettings.LogError(ex);
+            ShowNativeError(message);
+        }
+    }
+
+    private static void ShowNativeError(string message) =>
+        Native.MessageBox(IntPtr.Zero, message, Loc.AppName, Native.MB_OK | Native.MB_ICONERROR);
 }

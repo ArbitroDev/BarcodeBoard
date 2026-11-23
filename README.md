@@ -37,12 +37,12 @@ some text, pick QR code or Code 128, and the code appears.
 
 - **QR codes and Code 128 barcodes**, chosen per code. Accented characters work in QR codes; a character that Code 128 cannot encode is flagged, with a button to switch to QR code.
 - **Several codes side by side**, reordered by drag and drop, plus a resizable side list for fast entry (Enter creates the next row).
-- **Several tabs**, renamed with a double-click and saved to a `.codes` file to reopen later.
+- **Several tabs**, renamed from the tab's right-click menu and saved to a `.codes` file to reopen later.
 - **Scan mode**: only the chosen code stays sharp, the others are blurred so a scanner never reads the wrong one. The mouse pointer hides over the code. If the scanner is plugged into the same PC, what it reads is shown and compared with the expected code.
 - **Full screen** to scan a code at a large size.
 - **Copy** a code's image (for Word, Outlook, Teams…) or its text in one click.
 - **Guaranteed sharpness**: every bar is a whole number of screen pixels, with the standard quiet zones, whatever the Windows scaling.
-- **Designed for Windows 11**: Mica material, the real system window buttons, tabs that behave like File Explorer's (flush with the top when the window is maximized), light or dark theme (follows Windows by default). Also runs on Windows 10, with a simpler look.
+- **Designed for Windows 11**: built with WinUI 3, the native controls of Windows: tabs in the title bar, dragged out to a new window or onto another one, Mica material, the real system window buttons, light or dark theme (follows Windows by default). Also runs on Windows 10, with a simpler look.
 - **In English or French**, following the Windows display language.
 - **Fully local**: no network connection, no telemetry.
 
@@ -60,7 +60,8 @@ Download the latest version from the
 | `BarcodeBoard-Setup-x.y.z.exe` | **Recommended.** Installs the app for your account, without administrator rights: Start menu shortcut, `.codes` files open with a double-click, uninstall from Windows Settings. |
 | `BarcodeBoard-x.y.z-portable.exe` | A single file to run as is, without installation (USB drive, locked-down PC). |
 
-No .NET runtime is needed: everything is included.
+No .NET or Windows App SDK runtime is needed: everything is included. The portable exe extracts its
+runtime files to a temporary folder the first time it starts.
 
 > The files are not digitally signed. On first launch, Windows SmartScreen may show
 > "Windows protected your PC": click **More info**, then **Run anyway**.
@@ -79,7 +80,7 @@ Requirements: Windows 11 (recommended, the app is designed and tuned for it) or 
 | Scan mode | **F6** or the Scan mode button; arrow keys to change code, **Esc** to exit |
 | Full screen | Double-click a card |
 | Code size | Toolbar slider |
-| Tabs | **Ctrl+T** new, **Ctrl+W** close, **Ctrl+Tab** next, double-click to rename, drag along the tab bar to reorder |
+| Tabs | **Ctrl+T** new, **Ctrl+W** close (or middle-click), **Ctrl+Tab** next, right-click to rename, drag along the tab bar to reorder |
 | Windows | Drag a tab out of the tab bar to open it in its own window, or onto another window's tab bar to move it there (also from the tab's right-click menu). `.codes` files opened from File Explorer join the last window used. |
 | Files | **Ctrl+O** open, **Ctrl+S** save, **Ctrl+Shift+S** save as |
 | Side list | **Ctrl+L**, and drag its edge to resize it |
@@ -106,7 +107,8 @@ Settings (code size, theme, list width, window position) are stored in
 
 ## Building from source
 
-Prerequisite: the [.NET 10 SDK](https://dotnet.microsoft.com/download) on Windows.
+Prerequisite: the [.NET 10 SDK](https://dotnet.microsoft.com/download) on Windows. The Windows App SDK
+comes as a NuGet package.
 
 ```powershell
 dotnet test tests/BarcodeBoard.Core.Tests
@@ -125,9 +127,10 @@ creates the installer and the portable exe, then attaches them to the release.
 
 | Folder | Contents |
 |---|---|
-| `src/BarcodeBoard.Core` | Code generation (ZXing.Net), pixel computation, `.codes` files |
-| `src/BarcodeBoard` | The WPF app (English and French texts in `Loc.cs`) |
-| `tests/BarcodeBoard.Core.Tests` | Tests, including reading back the codes the app draws at 100, 125, 150 and 200 % |
+| `src/BarcodeBoard.Core` | Code generation (ZXing.Net), pixel computation, code images (PNG, clipboard bitmap), `.codes` files |
+| `src/BarcodeBoard.ViewModels` | App logic without UI: tabs, codes, scan mode, keyboard rules, settings, English and French texts (`Loc.cs`) |
+| `src/BarcodeBoard` | The WinUI 3 app (Windows App SDK) |
+| `tests/BarcodeBoard.Core.Tests` | Tests of the core and of the app logic, including reading back the codes the app draws at 100, 125, 150 and 200 % |
 | `installer` | Installer script |
 | `tools/IconGen.cs` | Icon generator (`dotnet run tools/IconGen.cs -- ico K src/BarcodeBoard/Assets`) |
 

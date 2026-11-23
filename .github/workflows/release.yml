@@ -34,6 +34,17 @@ jobs:
       - name: Exe autonome
         run: dotnet publish src/BarcodeBoard -c Release -o publish -p:Version=${{ steps.version.outputs.value }}
 
+      # L'exe portable et l'installeur ne livrent que BarcodeBoard.exe : tout le reste doit être dedans.
+      - name: Exe unique
+        shell: pwsh
+        run: |
+          $files = Get-ChildItem publish -File -Recurse
+          $files | ForEach-Object { "{0,12:N0}  {1}" -f $_.Length, $_.FullName }
+          if ($files.Count -ne 1 -or $files[0].Name -ne 'BarcodeBoard.exe') {
+            Write-Error "La publication doit produire le seul fichier BarcodeBoard.exe."
+            exit 1
+          }
+
       - name: Installeur
         shell: pwsh
         run: |

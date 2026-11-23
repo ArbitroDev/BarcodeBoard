@@ -37,12 +37,12 @@ lus. Vous tapez un texte, choisissez QR code ou Code 128, et le code apparaît.
 
 - **QR codes et codes-barres Code 128**, au choix pour chaque code. Les accents passent en QR code ; un caractère que le Code 128 ne sait pas encoder est signalé, avec un bouton pour passer en QR code.
 - **Plusieurs codes côte à côte**, réorganisables par glisser-déposer, et une liste latérale redimensionnable pour saisir vite (Entrée crée la ligne suivante).
-- **Plusieurs onglets**, renommables par double-clic, enregistrables dans un fichier `.codes` pour les rouvrir plus tard.
+- **Plusieurs onglets**, renommables par le menu du clic droit, enregistrables dans un fichier `.codes` pour les rouvrir plus tard.
 - **Mode scan** : seul le code choisi reste net, les autres sont floutés pour qu'une douchette ne lise jamais le voisin. Le pointeur de la souris s'efface au-dessus du code. Si la douchette est branchée sur le même PC, ce qu'elle lit s'affiche et est comparé au code attendu.
 - **Plein écran** pour scanner un code en grand.
 - **Copie** de l'image d'un code (pour Word, Outlook, Teams…) ou de son texte, d'un clic.
 - **Netteté garantie** : chaque barre fait un nombre entier de pixels de l'écran, avec les marges blanches réglementaires, quelle que soit la mise à l'échelle de Windows.
-- **Conçue pour Windows 11** : matériau Mica, vrais boutons de fenêtre du système, onglets qui se comportent comme ceux de l'Explorateur (collés en haut une fois la fenêtre agrandie), thème clair ou sombre (suit Windows par défaut). Fonctionne aussi sous Windows 10, avec une apparence plus simple.
+- **Conçue pour Windows 11** : construite avec WinUI 3, les contrôles natifs de Windows : onglets dans la barre de titre, glissés vers une nouvelle fenêtre ou une autre, matériau Mica, vrais boutons de fenêtre du système, thème clair ou sombre (suit Windows par défaut). Fonctionne aussi sous Windows 10, avec une apparence plus simple.
 - **En français ou en anglais**, selon la langue de Windows.
 - **Entièrement local** : aucune connexion réseau, aucune télémétrie.
 
@@ -60,7 +60,8 @@ Téléchargez la dernière version depuis la page
 | `BarcodeBoard-Setup-x.y.z.exe` | **Recommandé.** Installe l'application pour votre compte, sans droits administrateur : raccourci dans le menu Démarrer, ouverture des fichiers `.codes` par double-clic, désinstallation depuis les Paramètres de Windows. |
 | `BarcodeBoard-x.y.z-portable.exe` | Un seul fichier à lancer tel quel, sans installation (clé USB, poste verrouillé). |
 
-Aucun runtime .NET n'est nécessaire : tout est inclus.
+Aucun runtime .NET ni Windows App SDK n'est nécessaire : tout est inclus. L'exe portable extrait ses
+fichiers d'exécution dans un dossier temporaire à son premier lancement.
 
 > Les fichiers ne sont pas signés numériquement. Au premier lancement, Windows SmartScreen peut
 > afficher « Windows a protégé votre ordinateur » : cliquez sur **Informations complémentaires**
@@ -80,7 +81,7 @@ Windows 10 (1809 et plus), 64 bits.
 | Mode scan | **F6** ou bouton Mode scan ; flèches pour changer de code, **Échap** pour quitter |
 | Plein écran | Double-clic sur une carte |
 | Taille des codes | Curseur de la barre d'outils |
-| Onglets | **Ctrl+T** nouveau, **Ctrl+W** fermer, **Ctrl+Tab** suivant, double-clic pour renommer, glisser le long de la barre pour réorganiser |
+| Onglets | **Ctrl+T** nouveau, **Ctrl+W** fermer (ou clic du milieu), **Ctrl+Tab** suivant, clic droit pour renommer, glisser le long de la barre pour réorganiser |
 | Fenêtres | Glissez un onglet hors de la barre d'onglets pour l'ouvrir dans sa propre fenêtre, ou sur la barre d'une autre fenêtre pour l'y regrouper (aussi par clic droit sur l'onglet). Les fichiers `.codes` ouverts depuis l'Explorateur rejoignent la dernière fenêtre utilisée. |
 | Fichiers | **Ctrl+O** ouvrir, **Ctrl+S** enregistrer, **Ctrl+Maj+S** enregistrer sous |
 | Liste latérale | **Ctrl+L**, et glisser son bord pour la redimensionner |
@@ -107,7 +108,8 @@ enregistrés dans `%LOCALAPPDATA%\BarcodeBoard\settings.json`.
 
 ## Compiler depuis les sources
 
-Prérequis : [SDK .NET 10](https://dotnet.microsoft.com/download) sous Windows.
+Prérequis : [SDK .NET 10](https://dotnet.microsoft.com/download) sous Windows. Le Windows App SDK
+arrive par un paquet NuGet.
 
 ```powershell
 dotnet test tests/BarcodeBoard.Core.Tests
@@ -126,9 +128,10 @@ construit l'installeur et l'exe portable, puis les attache à la release.
 
 | Dossier | Contenu |
 |---|---|
-| `src/BarcodeBoard.Core` | Génération des codes (ZXing.Net), calcul des pixels, fichiers `.codes` |
-| `src/BarcodeBoard` | L'application WPF (textes français et anglais dans `Loc.cs`) |
-| `tests/BarcodeBoard.Core.Tests` | Tests, dont la relecture des codes générés à 100, 125, 150 et 200 % |
+| `src/BarcodeBoard.Core` | Génération des codes (ZXing.Net), calcul des pixels, images des codes (PNG, image du presse-papiers), fichiers `.codes` |
+| `src/BarcodeBoard.ViewModels` | Logique de l'application sans interface : onglets, codes, mode scan, règles du clavier, réglages, textes français et anglais (`Loc.cs`) |
+| `src/BarcodeBoard` | L'application WinUI 3 (Windows App SDK) |
+| `tests/BarcodeBoard.Core.Tests` | Tests du cœur et de la logique de l'application, dont la relecture des codes générés à 100, 125, 150 et 200 % |
 | `installer` | Script de l'installeur |
 | `tools/IconGen.cs` | Générateur de l'icône (`dotnet run tools/IconGen.cs -- ico K src/BarcodeBoard/Assets`) |
 

@@ -7,4 +7,10 @@
     <Copyright>Copyright (c) 2026 ArbitroDev. All rights reserved.</Copyright>
     <RepositoryUrl>https://github.com/ArbitroDev/BarcodeBoard</RepositoryUrl>
   </PropertyGroup>
+
+  <!-- Release : aucun fichier de symboles (.pdb), pour aucun projet. Sinon ceux des bibliothèques (Core,
+       ViewModels) sont recopiés à côté de l'exe publié, qui doit rester seul dans le dossier de publication. -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <DebugType>none</DebugType>
+  </PropertyGroup>
 </Project>

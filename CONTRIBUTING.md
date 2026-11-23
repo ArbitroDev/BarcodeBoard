@@ -83,9 +83,10 @@ Examples: `feat(scan): compare the scanned text with the expected code`,
 
 | Folder | Contents |
 |---|---|
-| `src/BarcodeBoard.Core` | Code generation (ZXing.Net), pixel layout, `.codes` files, language. No WPF, fully tested. |
-| `src/BarcodeBoard` | The WPF app |
-| `tests/BarcodeBoard.Core.Tests` | Tests of the core, and checks of the theme resources |
+| `src/BarcodeBoard.Core` | Code generation (ZXing.Net), pixel layout, code images (PNG, DIB), `.codes` files, language. No UI, fully tested. |
+| `src/BarcodeBoard.ViewModels` | App logic without UI: tabs, codes, scan mode, keyboard rules, settings, texts. Fully tested. |
+| `src/BarcodeBoard` | The WinUI 3 app (Windows App SDK, unpackaged and self-contained) |
+| `tests/BarcodeBoard.Core.Tests` | Tests of the core and of the app logic, and checks of the theme resources |
 | `installer` | Inno Setup script, and the conversion of the license for its license page |
 | `tools/IconGen.cs` | Icon generator |
 
@@ -94,8 +95,9 @@ Examples: `feat(scan): compare the scanned text with the expected code`,
 ### Codes
 
 - Codes are always **pure black on pure white**, whatever the theme.
-- Each module is a whole number of physical pixels: never smoothed, never stretched
-  (`Stretch="None"`, nearest-neighbor scaling). A scanner needs the whole code: a code too wide
+- Each module is a whole number of physical pixels: never smoothed, never stretched. Codes are
+  shown by `PixelImage`, sized to the bitmap in logical pixels and drawn in nearest-neighbor mode;
+  never by an `Image`, which cannot choose its interpolation. A scanner needs the whole code: a code too wide
   for its card gets thinner, down to one pixel per module, then is replaced by a message; it can
   still be copied or opened in full screen. It is never cut. A code with an error can be neither
   copied nor opened in full screen.
@@ -106,13 +108,14 @@ Examples: `feat(scan): compare the scanned text with the expected code`,
 
 A USB barcode scanner types what it reads. In scan mode the keyboard must change nothing in the
 tab: no shortcut, no edit, no rename. Control characters sent as Ctrl+letter go into the read
-text.
+text. The rules live in `KeyRouting` and `ScanReader` (`src/BarcodeBoard.ViewModels/Keyboard.cs`)
+and are unit-tested: change them there, with a test.
 
 ### Text and languages
 
 The app is in English and French, following the language of Windows. Every user-facing text goes
-through `src/BarcodeBoard/Loc.cs` (both languages side by side; in XAML,
-`{x:Static local:Loc.Name}`), and the messages of the core through `Lang.T`. Never hard-code a
+through `src/BarcodeBoard.ViewModels/Loc.cs` (both languages side by side; in XAML,
+`{x:Bind local:Loc.Name}`), and the messages of the core through `Lang.T`. Never hard-code a
 user-facing text. The displayed name is *Barcode Board* in English and *Tableau de code-barres*
 in French; the technical name (exe, folders, file format) stays `BarcodeBoard`.
 
@@ -121,10 +124,11 @@ To check the other language without changing Windows, run a Debug build with `--
 
 ### Colors and themes
 
-Every color comes from a key of the palettes, used with `DynamicResource`. `Themes/Light.xaml`
-and `Themes/Dark.xaml` define the same keys, and no palette key may reuse a key of `App.xaml`:
-the tests check both. A `TextBox` or a secondary window does not inherit the theme colors: bind
-them explicitly (`Foreground`, `SetResourceReference`).
+Every color comes from a key of the palettes, used with `ThemeResource`, or from a WinUI theme
+resource. The `Light` and `Dark` theme dictionaries of `App.xaml` define the same keys, and no
+palette key may reuse another key of `App.xaml`: the tests check both, and that every requested
+key exists. Backgrounds set in code use `Theme.Brush` (layers on Mica or opaque). A dialog or a
+flyout is shown outside the window tree: give it the window theme (`RequestedTheme`).
 
 ### Files
 
@@ -136,5 +140,7 @@ written to a temporary file, flushed, then put in place of the old one.
 
 Debug builds accept options to check a change and take screenshots:
 `--demo [--scan] [--theme light|dark] [--lang en|fr] [--no-mica] --capture file.png`.
-`--no-mica` keeps an opaque background, so the capture holds nothing of the rest of the screen:
-use it for published images.
+The capture is the window as Windows composes it, codes included pixel for pixel. `--no-mica`
+keeps an opaque background, so the capture holds nothing of the rest of the screen: use it for
+published images. `--simulate` drives the keyboard rules without any real click or key press and
+writes its log next to the capture.
