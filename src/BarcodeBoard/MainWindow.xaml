@@ -238,8 +238,8 @@
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
-                                <!-- Ligne suivante (aussi par Entrée dans une ligne) -->
-                                <Button Margin="18,6,0,0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Click="AddRow_Click"
+                                <!-- Ligne suivante (aussi par Entrée dans une ligne), de la largeur d'une ligne de code -->
+                                <Button Margin="0,6,0,0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Click="AddRow_Click"
                                         Background="Transparent" BorderBrush="{ThemeResource DashStroke}">
                                     <Grid>
                                         <StackPanel Orientation="Horizontal" Spacing="8">
