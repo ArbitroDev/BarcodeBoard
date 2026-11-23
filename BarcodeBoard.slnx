@@ -3,7 +3,6 @@
     <Project Path="src/BarcodeBoard.Core/BarcodeBoard.Core.csproj" />
     <Project Path="src/BarcodeBoard.ViewModels/BarcodeBoard.ViewModels.csproj" />
     <Project Path="src/BarcodeBoard/BarcodeBoard.csproj" />
-    <Project Path="src/BarcodeBoard.WinUI/BarcodeBoard.WinUI.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/BarcodeBoard.Core.Tests/BarcodeBoard.Core.Tests.csproj" />

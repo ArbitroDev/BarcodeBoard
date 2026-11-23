@@ -282,7 +282,7 @@ public class IconTests
     {
         for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
         {
-            var path = Path.Combine(dir.FullName, "src", "BarcodeBoard.WinUI", "Assets", "BarcodeBoard.ico");
+            var path = Path.Combine(dir.FullName, "src", "BarcodeBoard", "Assets", "BarcodeBoard.ico");
             if (File.Exists(path)) return File.ReadAllBytes(path);
         }
         throw new FileNotFoundException("BarcodeBoard.ico introuvable");
