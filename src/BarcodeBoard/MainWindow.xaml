@@ -197,6 +197,12 @@
                                             <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
                                         </Style>
                                     </ListView.ItemContainerStyle>
+                                    <!-- Comme la grille des codes : une ligne ajoutée apparaît tout de suite, sans fondu -->
+                                    <ListView.ItemContainerTransitions>
+                                        <TransitionCollection>
+                                            <ReorderThemeTransition/>
+                                        </TransitionCollection>
+                                    </ListView.ItemContainerTransitions>
                                     <ListView.ItemTemplate>
                                         <DataTemplate x:DataType="local:CodeItemViewModel">
                                             <Grid Margin="0,1" Background="Transparent">
@@ -381,6 +387,14 @@
                                         <Setter Property="AllowFocusOnInteraction" Value="False"/>
                                     </Style>
                                 </GridView.ItemContainerStyle>
+                                <!-- Pas d'animation d'entrée ni de suppression (celles de GridView par défaut) : une carte ajoutée
+                                     apparaissait au bout de près d'une seconde, en fondu, son code encore gris. Seul le
+                                     réordonnancement reste animé. -->
+                                <GridView.ItemContainerTransitions>
+                                    <TransitionCollection>
+                                        <ReorderThemeTransition/>
+                                    </TransitionCollection>
+                                </GridView.ItemContainerTransitions>
                                 <GridView.ItemsPanel>
                                     <ItemsPanelTemplate>
                                         <controls:WrapPanel/>
