@@ -29,6 +29,7 @@ public static class Loc
         tabCount == 1 ? selectedTab : T($"{selectedTab} et {tabCount - 1} autre(s)", $"{selectedTab} and {tabCount - 1} more");
     public static string CloseTab => T("Fermer l'onglet", "Close tab");
     public static string Rename => T("Renommer", "Rename");
+    public static string CloseTabShortcut => "Ctrl+W";
     public static string Untitled(int n) => T($"Sans titre {n}", $"Untitled {n}");
 
     // ---- Barre d'outils ----

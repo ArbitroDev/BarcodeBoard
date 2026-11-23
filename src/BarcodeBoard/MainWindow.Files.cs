@@ -10,19 +10,19 @@ public sealed partial class MainWindow
     private string InitialFolder =>
         _settings.LastFolder is { } f && Directory.Exists(f) ? f : Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
 
-    private void Open_Click(object sender, RoutedEventArgs e) => OpenFiles();
+    private void Open_Click(object sender, RoutedEventArgs e) => Run(OpenFiles());
 
     private void Save_Click(Microsoft.UI.Xaml.Controls.SplitButton sender, Microsoft.UI.Xaml.Controls.SplitButtonClickEventArgs e)
     {
-        if (Tab is { } tab) _ = Save(tab);
+        if (Tab is { } tab) Run(Save(tab));
     }
 
     private void SaveAs_Click(object sender, RoutedEventArgs e)
     {
-        if (Tab is { } tab) _ = SaveAs(tab);
+        if (Tab is { } tab) Run(SaveAs(tab));
     }
 
-    private async void OpenFiles()
+    private async Task OpenFiles()
     {
         var picker = new FileOpenPicker(AppWindow.Id) { Title = Loc.OpenTitle, SuggestedFolder = InitialFolder };
         picker.FileTypeFilter.Add(CodesFile.Extension);
@@ -51,7 +51,7 @@ public sealed partial class MainWindow
         try { doc = CodesFile.Load(full); }
         catch (InvalidCodesFileException ex)
         {
-            _ = Dialogs.Show(Root, Loc.OpenFailedTitle, $"{Path.GetFileName(full)}\n\n{ex.Message}");
+            Run(Dialogs.Show(Root, Loc.OpenFailedTitle, $"{Path.GetFileName(full)}\n\n{ex.Message}"));
             return;
         }
 

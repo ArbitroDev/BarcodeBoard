@@ -43,12 +43,12 @@ public sealed partial class MainWindow
             case KeyAction.FullPrevious: StepFull(-1); break;
             case KeyAction.FullNext: StepFull(1); break;
             case KeyAction.NewTab: ViewModel.NewTab(); FocusComposer(); break;
-            case KeyAction.CloseTab: if (Tab is { } tab) _ = CloseTab(tab); break;
+            case KeyAction.CloseTab: if (Tab is { } tab) Run(CloseTab(tab)); break;
             case KeyAction.NextTab: SelectTabOffset(1); break;
             case KeyAction.PreviousTab: SelectTabOffset(-1); break;
-            case KeyAction.Open: OpenFiles(); break;
-            case KeyAction.Save: if (Tab is { } saved) _ = Save(saved); break;
-            case KeyAction.SaveAs: if (Tab is { } savedAs) _ = SaveAs(savedAs); break;
+            case KeyAction.Open: Run(OpenFiles()); break;
+            case KeyAction.Save: if (Tab is { } saved) Run(Save(saved)); break;
+            case KeyAction.SaveAs: if (Tab is { } savedAs) Run(SaveAs(savedAs)); break;
             case KeyAction.ToggleList: ViewModel.SideOpen = !ViewModel.SideOpen; break;
             case KeyAction.ToggleSettings: ToggleSettings(); break;
             case KeyAction.ToggleScan: ViewModel.ScanMode = !ViewModel.ScanMode; break;

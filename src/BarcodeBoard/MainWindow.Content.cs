@@ -410,6 +410,20 @@ public sealed partial class MainWindow
 
     // ================= Message temporaire =================
 
+    /// <summary>
+    /// Lance une action asynchrone sans l'attendre : une erreur imprévue est journalisée et signalée,
+    /// comme toute erreur de l'interface, au lieu de se perdre.
+    /// </summary>
+    private async void Run(Task task)
+    {
+        try { await task; }
+        catch (Exception ex)
+        {
+            AppSettings.LogError(ex);
+            await Dialogs.Show(Root, Loc.AppName, Loc.UnexpectedError(ex.Message));
+        }
+    }
+
     internal void ShowToast(string message)
     {
         ToastText.Text = message;

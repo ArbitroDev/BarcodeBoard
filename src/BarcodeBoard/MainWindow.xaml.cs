@@ -503,7 +503,7 @@ public sealed partial class MainWindow : Window
 
     private void Tabs_TabCloseRequested(TabView sender, TabViewTabCloseRequestedEventArgs args)
     {
-        if (TabOf(args.Tab) is { } tab) _ = CloseTab(tab);
+        if (TabOf(args.Tab) is { } tab) Run(CloseTab(tab));
     }
 
     private void SelectTabOffset(int delta)
@@ -577,8 +577,8 @@ public sealed partial class MainWindow : Window
         menu.Items.Add(moveTo);
 
         menu.Items.Add(new MenuFlyoutSeparator());
-        var close = new MenuFlyoutItem { Text = Loc.CloseTab, KeyboardAcceleratorTextOverride = "Ctrl+W" };
-        close.Click += (_, _) => _ = CloseTab(tab);
+        var close = new MenuFlyoutItem { Text = Loc.CloseTab, KeyboardAcceleratorTextOverride = Loc.CloseTabShortcut };
+        close.Click += (_, _) => Run(CloseTab(tab));
         menu.Items.Add(close);
     }
 
