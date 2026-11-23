@@ -99,7 +99,7 @@ public sealed partial class MainWindow
         tab.FilePath = Path.GetFullPath(path);
         tab.IsDirty = false;
         _settings.LastFolder = Path.GetDirectoryName(tab.FilePath);
-        ShowToast(Loc.SavedTo(Path.GetFileName(path)));
+        ShowToast(Loc.SavedTo(Path.GetFileName(path)), Microsoft.UI.Xaml.Controls.InfoBarSeverity.Success);
         return true;
     }
 }

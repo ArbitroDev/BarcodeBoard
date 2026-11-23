@@ -36,7 +36,7 @@ public sealed partial class MainWindow
 
     private void AddFromComposer()
     {
-        if (Tab is { } tab && !tab.AddFromComposer()) ShowToast(Loc.TypeBeforeAdd);
+        if (Tab is { } tab && !tab.AddFromComposer()) ShowToast(Loc.TypeBeforeAdd, InfoBarSeverity.Warning);
         ComposerBox.Focus(FocusState.Programmatic);
     }
 
@@ -204,7 +204,8 @@ public sealed partial class MainWindow
         // Le bouton est désactivé pour un code en erreur : il n'a pas d'image.
         if (Item(sender) is not { Matrix: { } matrix }) return;
         var bitmap = CodeBitmaps.ForClipboard(matrix, ViewModel.CodeSize, ViewModel.DpiScale);
-        ShowToast(Win32Clipboard.SetImage(_hwnd, bitmap) ? Loc.ImageCopied : Loc.ClipboardBusy);
+        if (Win32Clipboard.SetImage(_hwnd, bitmap)) ShowToast(Loc.ImageCopied, InfoBarSeverity.Success);
+        else ShowToast(Loc.ClipboardBusy, InfoBarSeverity.Warning);
     }
 
     private void CopyText_Click(object sender, RoutedEventArgs e)
@@ -220,8 +221,9 @@ public sealed partial class MainWindow
 
     private void CopyText(string text)
     {
-        if (string.IsNullOrEmpty(text)) { ShowToast(Loc.NothingToCopy); return; }
-        ShowToast(Win32Clipboard.SetText(_hwnd, text) ? Loc.TextCopied(text.Length > 60 ? text[..57] + "…" : text) : Loc.ClipboardBusy);
+        if (string.IsNullOrEmpty(text)) { ShowToast(Loc.NothingToCopy, InfoBarSeverity.Warning); return; }
+        if (Win32Clipboard.SetText(_hwnd, text)) ShowToast(Loc.TextCopied(text.Length > 60 ? text[..57] + "…" : text), InfoBarSeverity.Success);
+        else ShowToast(Loc.ClipboardBusy, InfoBarSeverity.Warning);
     }
 
     private void Delete_Click(object sender, RoutedEventArgs e)
@@ -419,10 +421,12 @@ public sealed partial class MainWindow
         }
     }
 
-    internal void ShowToast(string message)
+    /// <summary>Message bref (InfoBar), fermé tout seul après quelques secondes.</summary>
+    internal void ShowToast(string message, InfoBarSeverity severity = InfoBarSeverity.Informational)
     {
-        ToastText.Text = message;
-        Toast.Opacity = 1;
+        Toast.Message = message;
+        Toast.Severity = severity;
+        Toast.IsOpen = true;
         _toastTimer.Stop();
         _toastTimer.Start();
     }
@@ -430,7 +434,7 @@ public sealed partial class MainWindow
     private void HideToast()
     {
         _toastTimer.Stop();
-        Toast.Opacity = 0;
+        Toast.IsOpen = false;
     }
 
 #if DEBUG
