@@ -116,14 +116,31 @@
                                       Background="Transparent" BorderThickness="0">
                             <!-- Bascule discrète : coché, un léger fond, pas la couleur d'accent -->
                             <ToggleButton.Resources>
-                                <StaticResource x:Key="ToggleButtonBackgroundChecked" ResourceKey="SubtleFillColorSecondaryBrush"/>
-                                <StaticResource x:Key="ToggleButtonBackgroundCheckedPointerOver" ResourceKey="SubtleFillColorTertiaryBrush"/>
-                                <StaticResource x:Key="ToggleButtonBackgroundCheckedPressed" ResourceKey="SubtleFillColorTertiaryBrush"/>
-                                <StaticResource x:Key="ToggleButtonForegroundChecked" ResourceKey="TextFillColorPrimaryBrush"/>
-                                <StaticResource x:Key="ToggleButtonForegroundCheckedPointerOver" ResourceKey="TextFillColorPrimaryBrush"/>
-                                <StaticResource x:Key="ToggleButtonForegroundCheckedPressed" ResourceKey="TextFillColorSecondaryBrush"/>
-                                <SolidColorBrush x:Key="ToggleButtonBorderBrushChecked" Color="Transparent"/>
-                                <SolidColorBrush x:Key="ToggleButtonBorderBrushCheckedPointerOver" Color="Transparent"/>
+                                <ResourceDictionary>
+                                    <!-- Par thème : résolues dans le thème de la fenêtre, et suivent son changement -->
+                                    <ResourceDictionary.ThemeDictionaries>
+                                        <ResourceDictionary x:Key="Light">
+                                            <StaticResource x:Key="ToggleButtonBackgroundChecked" ResourceKey="SubtleFillColorSecondaryBrush"/>
+                                            <StaticResource x:Key="ToggleButtonBackgroundCheckedPointerOver" ResourceKey="SubtleFillColorTertiaryBrush"/>
+                                            <StaticResource x:Key="ToggleButtonBackgroundCheckedPressed" ResourceKey="SubtleFillColorTertiaryBrush"/>
+                                            <StaticResource x:Key="ToggleButtonForegroundChecked" ResourceKey="TextFillColorPrimaryBrush"/>
+                                            <StaticResource x:Key="ToggleButtonForegroundCheckedPointerOver" ResourceKey="TextFillColorPrimaryBrush"/>
+                                            <StaticResource x:Key="ToggleButtonForegroundCheckedPressed" ResourceKey="TextFillColorSecondaryBrush"/>
+                                            <SolidColorBrush x:Key="ToggleButtonBorderBrushChecked" Color="Transparent"/>
+                                            <SolidColorBrush x:Key="ToggleButtonBorderBrushCheckedPointerOver" Color="Transparent"/>
+                                        </ResourceDictionary>
+                                        <ResourceDictionary x:Key="Dark">
+                                            <StaticResource x:Key="ToggleButtonBackgroundChecked" ResourceKey="SubtleFillColorSecondaryBrush"/>
+                                            <StaticResource x:Key="ToggleButtonBackgroundCheckedPointerOver" ResourceKey="SubtleFillColorTertiaryBrush"/>
+                                            <StaticResource x:Key="ToggleButtonBackgroundCheckedPressed" ResourceKey="SubtleFillColorTertiaryBrush"/>
+                                            <StaticResource x:Key="ToggleButtonForegroundChecked" ResourceKey="TextFillColorPrimaryBrush"/>
+                                            <StaticResource x:Key="ToggleButtonForegroundCheckedPointerOver" ResourceKey="TextFillColorPrimaryBrush"/>
+                                            <StaticResource x:Key="ToggleButtonForegroundCheckedPressed" ResourceKey="TextFillColorSecondaryBrush"/>
+                                            <SolidColorBrush x:Key="ToggleButtonBorderBrushChecked" Color="Transparent"/>
+                                            <SolidColorBrush x:Key="ToggleButtonBorderBrushCheckedPointerOver" Color="Transparent"/>
+                                        </ResourceDictionary>
+                                    </ResourceDictionary.ThemeDictionaries>
+                                </ResourceDictionary>
                             </ToggleButton.Resources>
                             <StackPanel Orientation="Horizontal" Spacing="8">
                                 <PathIcon Width="16" Height="16" VerticalAlignment="Center" Data="F0 M2,2.5 H14 V13.5 H2 Z M3.2,3.7 V12.3 H5.9 V3.7 Z M7.1,3.7 V12.3 H12.8 V3.7 Z"/>
@@ -326,12 +343,27 @@
                             <Button Grid.Column="1" Click="ExitScan_Click" VerticalAlignment="Center" IsTabStop="False"
                                     Background="Transparent" BorderBrush="{ThemeResource OnAccentBorder}" Foreground="{ThemeResource OnAccent}">
                                 <Button.Resources>
-                                    <StaticResource x:Key="ButtonBackgroundPointerOver" ResourceKey="OnAccentHover"/>
-                                    <StaticResource x:Key="ButtonBackgroundPressed" ResourceKey="OnAccentHover"/>
-                                    <StaticResource x:Key="ButtonForegroundPointerOver" ResourceKey="OnAccent"/>
-                                    <StaticResource x:Key="ButtonForegroundPressed" ResourceKey="OnAccent"/>
-                                    <StaticResource x:Key="ButtonBorderBrushPointerOver" ResourceKey="OnAccentBorder"/>
-                                    <StaticResource x:Key="ButtonBorderBrushPressed" ResourceKey="OnAccentBorder"/>
+                                    <ResourceDictionary>
+                                        <!-- Par thème : résolues dans le thème de la fenêtre, et suivent son changement -->
+                                        <ResourceDictionary.ThemeDictionaries>
+                                            <ResourceDictionary x:Key="Light">
+                                                <StaticResource x:Key="ButtonBackgroundPointerOver" ResourceKey="OnAccentHover"/>
+                                                <StaticResource x:Key="ButtonBackgroundPressed" ResourceKey="OnAccentHover"/>
+                                                <StaticResource x:Key="ButtonForegroundPointerOver" ResourceKey="OnAccent"/>
+                                                <StaticResource x:Key="ButtonForegroundPressed" ResourceKey="OnAccent"/>
+                                                <StaticResource x:Key="ButtonBorderBrushPointerOver" ResourceKey="OnAccentBorder"/>
+                                                <StaticResource x:Key="ButtonBorderBrushPressed" ResourceKey="OnAccentBorder"/>
+                                            </ResourceDictionary>
+                                            <ResourceDictionary x:Key="Dark">
+                                                <StaticResource x:Key="ButtonBackgroundPointerOver" ResourceKey="OnAccentHover"/>
+                                                <StaticResource x:Key="ButtonBackgroundPressed" ResourceKey="OnAccentHover"/>
+                                                <StaticResource x:Key="ButtonForegroundPointerOver" ResourceKey="OnAccent"/>
+                                                <StaticResource x:Key="ButtonForegroundPressed" ResourceKey="OnAccent"/>
+                                                <StaticResource x:Key="ButtonBorderBrushPointerOver" ResourceKey="OnAccentBorder"/>
+                                                <StaticResource x:Key="ButtonBorderBrushPressed" ResourceKey="OnAccentBorder"/>
+                                            </ResourceDictionary>
+                                        </ResourceDictionary.ThemeDictionaries>
+                                    </ResourceDictionary>
                                 </Button.Resources>
                                 <TextBlock Text="{x:Bind local:Loc.ExitScan}"/>
                             </Button>
