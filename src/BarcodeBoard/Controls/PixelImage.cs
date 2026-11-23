@@ -38,7 +38,14 @@ public sealed class PixelImage : Panel
         _sprite = compositor.CreateSpriteVisual();
         _sprite.Brush = _brush;
         ElementCompositionPreview.SetElementChildVisual(this, _sprite);
-        Unloaded += (_, _) => { _surface?.Dispose(); _surface = null; };
+        Unloaded += (_, _) =>
+        {
+            // Un Unloaded tardif peut suivre le Loaded d'un élément déplacé : il est alors ignoré.
+            if (IsLoaded) return;
+            _brush.Surface = null;
+            _surface?.Dispose();
+            _surface = null;
+        };
         Loaded += (_, _) => { if (_surface is null) OnSourceChanged(); };
     }
 
@@ -80,10 +87,10 @@ public sealed class PixelImage : Panel
         if (version != _version) { stream.Dispose(); return; } // une image plus récente a été demandée entre-temps
         stream.Seek(0);
         var surface = LoadedImageSurface.StartLoadFromStream(stream);
-        surface.LoadCompleted += (s, _) =>
+        surface.LoadCompleted += (s, e) =>
         {
             stream.Dispose();
-            if (version != _version) { s.Dispose(); return; }
+            if (version != _version || e.Status != LoadedImageSourceLoadStatus.Success) { s.Dispose(); return; }
             // L'ancienne image reste affichée jusqu'à ce que la nouvelle soit prête : pas de clignement.
             var previous = _surface;
             _surface = s;
