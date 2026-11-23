@@ -37,12 +37,12 @@ lus. Vous tapez un texte, choisissez QR code ou Code 128, et le code apparaît.
 
 - **QR codes et codes-barres Code 128**, au choix pour chaque code. Les accents passent en QR code ; un caractère que le Code 128 ne sait pas encoder est signalé, avec un bouton pour passer en QR code.
 - **Plusieurs codes côte à côte**, réorganisables par glisser-déposer, et une liste latérale redimensionnable pour saisir vite (Entrée crée la ligne suivante).
-- **Plusieurs onglets**, renommables par double-clic (ou par le menu du clic droit), enregistrables dans un fichier `.codes` pour les rouvrir plus tard.
+- **Plusieurs onglets**, renommables par le menu du clic droit, enregistrables dans un fichier `.codes` pour les rouvrir plus tard.
 - **Mode scan** : seul le code choisi reste net, les autres sont floutés pour qu'une douchette ne lise jamais le voisin. Le pointeur de la souris s'efface au-dessus du code. Si la douchette est branchée sur le même PC, ce qu'elle lit s'affiche et est comparé au code attendu.
 - **Plein écran** pour scanner un code en grand.
 - **Copie** de l'image d'un code (pour Word, Outlook, Teams…) ou de son texte, d'un clic.
 - **Netteté garantie** : chaque barre fait un nombre entier de pixels de l'écran, avec les marges blanches réglementaires, quelle que soit la mise à l'échelle de Windows.
-- **Conçue pour Windows 11** : construite avec WinUI 3, les contrôles natifs de Windows : onglets dans la barre de titre comme ceux de l'Explorateur (collés en haut une fois la fenêtre agrandie, glissés vers une nouvelle fenêtre ou une autre), matériau Mica, vrais boutons de fenêtre du système, thème clair ou sombre (suit Windows par défaut). Fonctionne aussi sous Windows 10, avec une apparence plus simple.
+- **Conçue pour Windows 11** : construite avec WinUI 3, les contrôles natifs de Windows : onglets dans la barre de titre, glissés vers une nouvelle fenêtre ou une autre, matériau Mica, vrais boutons de fenêtre du système, thème clair ou sombre (suit Windows par défaut). Fonctionne aussi sous Windows 10, avec une apparence plus simple.
 - **En français ou en anglais**, selon la langue de Windows.
 - **Entièrement local** : aucune connexion réseau, aucune télémétrie.
 
@@ -81,7 +81,7 @@ Windows 10 (1809 et plus), 64 bits.
 | Mode scan | **F6** ou bouton Mode scan ; flèches pour changer de code, **Échap** pour quitter |
 | Plein écran | Double-clic sur une carte |
 | Taille des codes | Curseur de la barre d'outils |
-| Onglets | **Ctrl+T** nouveau, **Ctrl+W** fermer (ou clic du milieu), **Ctrl+Tab** suivant, double-clic ou clic droit pour renommer, glisser le long de la barre pour réorganiser |
+| Onglets | **Ctrl+T** nouveau, **Ctrl+W** fermer (ou clic du milieu), **Ctrl+Tab** suivant, clic droit pour renommer, glisser le long de la barre pour réorganiser |
 | Fenêtres | Glissez un onglet hors de la barre d'onglets pour l'ouvrir dans sa propre fenêtre, ou sur la barre d'une autre fenêtre pour l'y regrouper (aussi par clic droit sur l'onglet). Les fichiers `.codes` ouverts depuis l'Explorateur rejoignent la dernière fenêtre utilisée. |
 | Fichiers | **Ctrl+O** ouvrir, **Ctrl+S** enregistrer, **Ctrl+Maj+S** enregistrer sous |
 | Liste latérale | **Ctrl+L**, et glisser son bord pour la redimensionner |
