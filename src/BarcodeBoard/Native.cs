@@ -81,6 +81,16 @@ internal static class Native
     [DllImport("user32.dll")] public static extern bool SetWindowPlacement(IntPtr hwnd, ref WINDOWPLACEMENT placement);
     [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hwnd);
     [DllImport("user32.dll")] public static extern bool GetCursorPos(out POINT point);
+    [DllImport("user32.dll")] private static extern short GetAsyncKeyState(int key);
+    [DllImport("user32.dll")] private static extern int GetSystemMetrics(int index);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int MessageBox(IntPtr owner, string text, string caption, uint type);
+
+    public const uint MB_OK = 0, MB_ICONERROR = 0x10;
+    private const int VK_LBUTTON = 0x01, VK_RBUTTON = 0x02, SM_SWAPBUTTON = 23;
+
+    /// <summary>Vrai si le bouton principal de la souris est enfoncé (le droit pour un gaucher qui les a inversés).</summary>
+    public static bool IsPrimaryButtonDown() =>
+        (GetAsyncKeyState(GetSystemMetrics(SM_SWAPBUTTON) != 0 ? VK_RBUTTON : VK_LBUTTON) & 0x8000) != 0;
 
     /// <summary>Position normale (non agrandie) de la fenêtre, en pixels physiques.</summary>
     public static RECT? NormalPosition(IntPtr hwnd)

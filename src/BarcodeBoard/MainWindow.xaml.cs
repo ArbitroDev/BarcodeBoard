@@ -729,6 +729,9 @@ public sealed partial class MainWindow : Window
     {
         var grab = _draggedTab?.Grab ?? new PointInt32(0, 0);
         _draggedTab = null;
+        // TabView signale de la même façon un glisser annulé par Échap : le bouton de la souris, lui, est encore
+        // enfoncé (un vrai lâcher le relâche). Annulé, l'onglet reste où il était.
+        if (Native.IsPrimaryButtonDown()) return;
         if (TabOf(args.Tab) is not { } tab || !Native.GetCursorPos(out var cursor) || Root.XamlRoot is not { } root) return;
         var position = AppWindow.Position;
         var size = AppWindow.Size;
