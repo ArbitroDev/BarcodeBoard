@@ -132,11 +132,13 @@ public sealed class CodeItemViewModel : Observable
         {
             if (!Set(ref _isBlurred, value)) return;
             Raise(nameof(ShownImage));
+            Raise(nameof(NotBlurred));
             Raise(nameof(CodeOpacity));
             Raise(nameof(DetailsOpacity));
         }
     }
 
+    public bool NotBlurred => !IsBlurred;
     /// <summary>Anneau de sélection : code en cours de modification, ou code visé en mode scan.</summary>
     public bool ShowRing => IsSelected || IsScanFocus;
     /// <summary>Le pointeur ne doit pas masquer le code pendant la lecture ; sans code affiché, il reste visible.</summary>

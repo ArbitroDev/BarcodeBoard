@@ -274,3 +274,32 @@ public class SettingsTests
         Assert.Equal(ThemeChoice.System, ThemeSetting.Parse(s.Theme));
     }
 }
+
+/// <summary>Icône de la barre de titre : l'image dessinée pour la taille exacte, à chaque échelle.</summary>
+public class IconTests
+{
+    private static byte[] Ico()
+    {
+        for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
+        {
+            var path = Path.Combine(dir.FullName, "src", "BarcodeBoard.WinUI", "Assets", "BarcodeBoard.ico");
+            if (File.Exists(path)) return File.ReadAllBytes(path);
+        }
+        throw new FileNotFoundException("BarcodeBoard.ico introuvable");
+    }
+
+    private static int PngWidth(byte[] png) => System.Buffers.Binary.BinaryPrimitives.ReadInt32BigEndian(png.AsSpan(16));
+
+    [Theory]
+    [InlineData(16, 16)]
+    [InlineData(20, 20)]
+    [InlineData(24, 24)]
+    [InlineData(32, 32)]
+    [InlineData(17, 20)]
+    [InlineData(300, 256)]
+    public void Picks_the_frame_drawn_for_the_size(int wanted, int expected) =>
+        Assert.Equal(expected, PngWidth(IconFrames.Png(Ico(), wanted)!));
+
+    [Fact]
+    public void Not_an_icon_gives_nothing() => Assert.Null(IconFrames.Png([1, 2, 3, 4, 5, 6, 7], 16));
+}
