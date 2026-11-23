@@ -137,6 +137,9 @@ public sealed partial class MainWindow : Window
         HookTabScroller();
         foreach (var file in _startupFiles) OpenPath(file);
         FocusComposer();
+#if DEBUG
+        if (_isFirst) DebugScenario.Run(this, ViewModel);
+#endif
     }
 
     /// <summary>Icône de la barre de titre : l'image du .ico dessinée pour 16 px à l'échelle de l'écran, sans redimensionnement.</summary>

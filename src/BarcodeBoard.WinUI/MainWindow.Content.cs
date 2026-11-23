@@ -415,4 +415,8 @@ public sealed partial class MainWindow
         _toastTimer.Stop();
         Toast.Opacity = 0;
     }
+
+#if DEBUG
+    internal void DebugOpenFull(CodeItemViewModel item) => OpenFull(item);
+#endif
 }
