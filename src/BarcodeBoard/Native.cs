@@ -61,31 +61,6 @@ internal static class Win32Clipboard
     [DllImport("kernel32.dll")] private static extern IntPtr GlobalFree(IntPtr memory);
 }
 
-/// <summary>
-/// Pointeur masqué au-dessus du code net en mode scan : il ne doit pas cacher une partie du code pendant la lecture.
-/// WinUI n'a pas de forme « aucun » ; le compteur d'affichage de Windows est donc utilisé, toujours rééquilibré.
-/// </summary>
-internal static class PointerVisibility
-{
-    private static bool _hidden;
-
-    public static void Hide()
-    {
-        if (_hidden) return;
-        _hidden = true;
-        ShowCursor(false);
-    }
-
-    public static void Show()
-    {
-        if (!_hidden) return;
-        _hidden = false;
-        ShowCursor(true);
-    }
-
-    [DllImport("user32.dll")] private static extern int ShowCursor(bool show);
-}
-
 /// <summary>Position des fenêtres en pixels physiques, et mise au premier plan.</summary>
 internal static class Native
 {

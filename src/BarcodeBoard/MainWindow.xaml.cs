@@ -289,7 +289,6 @@ public sealed partial class MainWindow : Window
     {
         Theme.Changed -= ApplyTheme;
         _toastTimer.Stop();
-        PointerVisibility.Show();
         // Les onglets de cette fenêtre disparaissent avec elle (un onglet parti ailleurs n'est plus dans sa liste).
         foreach (var tab in ViewModel.Tabs) TabItems.Remove(tab);
     }
@@ -422,7 +421,6 @@ public sealed partial class MainWindow : Window
         switch (e.PropertyName)
         {
             case nameof(MainViewModel.SelectedTab):
-                PointerVisibility.Show();
                 SyncSelectedTab();
                 WatchTitle();
                 break;

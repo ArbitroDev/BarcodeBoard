@@ -55,8 +55,8 @@ public sealed partial class MainWindow
             case KeyAction.ToggleSettings: ToggleSettings(); break;
             case KeyAction.ToggleScan: ViewModel.ScanMode = !ViewModel.ScanMode; break;
             case KeyAction.ExitScan: ViewModel.ScanMode = false; break;
-            case KeyAction.ScanPrevious: Tab?.MoveScanFocus(-1); PointerVisibility.Show(); BringScanFocusIntoView(); break;
-            case KeyAction.ScanNext: Tab?.MoveScanFocus(1); PointerVisibility.Show(); BringScanFocusIntoView(); break;
+            case KeyAction.ScanPrevious: Tab?.MoveScanFocus(-1); BringScanFocusIntoView(); break;
+            case KeyAction.ScanNext: Tab?.MoveScanFocus(1); BringScanFocusIntoView(); break;
             case KeyAction.FinishRead: if (_scan.Finish() is { } read) ViewModel.LastRead = read; break;
             case KeyAction.Backspace: _scan.Backspace(); break;
             case KeyAction.Space: _scan.AddSpace(); break;
@@ -74,7 +74,6 @@ public sealed partial class MainWindow
     private void OnScanModeChanged()
     {
         _scan.Clear();
-        PointerVisibility.Show();
         if (ViewModel.ScanMode)
         {
             CommitPendingRenames();

@@ -198,17 +198,6 @@ public sealed partial class MainWindow
     private static DependencyObject? VisualTreeHelperParent(object element) =>
         Microsoft.UI.Xaml.Media.VisualTreeHelper.GetParent((DependencyObject)element);
 
-    /// <summary>
-    /// Le pointeur ne doit pas masquer le code net pendant la lecture (mode scan) ; sans code affiché, il reste visible
-    /// pour cliquer sur « Passer en QR code ». Réévalué à chaque mouvement : le code sous le pointeur peut devenir net.
-    /// </summary>
-    private void Code_PointerMoved(object sender, PointerRoutedEventArgs e)
-    {
-        if (Item(sender) is { HidesPointer: true }) PointerVisibility.Hide();
-        else PointerVisibility.Show();
-    }
-
-    private void Code_PointerExited(object sender, PointerRoutedEventArgs e) => PointerVisibility.Show();
 
     private void Copy_Click(object sender, RoutedEventArgs e)
     {
@@ -398,7 +387,6 @@ public sealed partial class MainWindow
         _fullItem = null;
         FullView.Visibility = Visibility.Collapsed;
         FullImage.Source = null;
-        PointerVisibility.Show();
         if (ViewModel.ScanMode) CodesScroll.Focus(FocusState.Programmatic);
         else FocusComposer();
     }
@@ -414,9 +402,6 @@ public sealed partial class MainWindow
     private void FullPrev_Click(object sender, RoutedEventArgs e) => StepFull(-1);
     private void FullNext_Click(object sender, RoutedEventArgs e) => StepFull(1);
     private void FullClose_Click(object sender, RoutedEventArgs e) => CloseFull();
-
-    private void FullImage_PointerEntered(object sender, PointerRoutedEventArgs e) => PointerVisibility.Hide();
-    private void FullImage_PointerExited(object sender, PointerRoutedEventArgs e) => PointerVisibility.Show();
 
     // ================= Message temporaire =================
 

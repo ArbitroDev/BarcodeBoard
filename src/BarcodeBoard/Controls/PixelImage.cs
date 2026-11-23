@@ -22,6 +22,10 @@ public sealed class PixelImage : Panel
     public static readonly DependencyProperty SourceProperty = DependencyProperty.Register(
         nameof(Source), typeof(object), typeof(PixelImage), new PropertyMetadata(null, (d, _) => ((PixelImage)d).OnSourceChanged()));
 
+    public static readonly DependencyProperty HidesPointerProperty = DependencyProperty.Register(
+        nameof(HidesPointer), typeof(bool), typeof(PixelImage),
+        new PropertyMetadata(false, (d, e) => ((PixelImage)d).ProtectedCursor = (bool)e.NewValue ? PointerCursor.Hidden : null));
+
     private readonly SpriteVisual _sprite;
     private readonly CompositionSurfaceBrush _brush;
     private LoadedImageSurface? _surface;
@@ -29,7 +33,7 @@ public sealed class PixelImage : Panel
 
     public PixelImage()
     {
-        // Fond transparent : le code reçoit le pointeur (pointeur masqué sur le code net en mode scan).
+        // Fond transparent : le code reçoit le pointeur (HidesPointer).
         Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
         var compositor = ElementCompositionPreview.GetElementVisual(this).Compositor;
         _brush = compositor.CreateSurfaceBrush();
@@ -54,6 +58,13 @@ public sealed class PixelImage : Panel
     {
         get => (CodeBitmap?)GetValue(SourceProperty);
         set => SetValue(SourceProperty, value);
+    }
+
+    /// <summary>Pointeur invisible au-dessus de l'image : il ne doit cacher aucune partie d'un code en cours de lecture.</summary>
+    public bool HidesPointer
+    {
+        get => (bool)GetValue(HidesPointerProperty);
+        set => SetValue(HidesPointerProperty, value);
     }
 
     protected override Size MeasureOverride(Size availableSize) =>

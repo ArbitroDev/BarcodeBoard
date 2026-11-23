@@ -375,9 +375,11 @@
                                                     <!-- Un code doit toujours être affiché en entier pour être lu : trop large, il s'affine
                                                          (pixels entiers) ou laisse place à un message, jamais coupé (CodeBitmaps.ForScreen) -->
                                                     <Grid HorizontalAlignment="Center">
-                                                        <Grid Opacity="{x:Bind CodeOpacity, Mode=OneWay}" SizeChanged="CodeVisual_SizeChanged"
-                                                              PointerMoved="Code_PointerMoved" PointerExited="Code_PointerExited">
-                                                            <controls:PixelImage Source="{x:Bind ShownImage, Mode=OneWay}" Visibility="{x:Bind ShowImage, Mode=OneWay}"/>
+                                                        <Grid Opacity="{x:Bind CodeOpacity, Mode=OneWay}" SizeChanged="CodeVisual_SizeChanged">
+                                                            <!-- Le pointeur ne doit pas masquer le code pendant la lecture ; sans code affiché,
+                                                                 il reste visible pour cliquer sur « Passer en QR code » -->
+                                                            <controls:PixelImage Source="{x:Bind ShownImage, Mode=OneWay}" Visibility="{x:Bind ShowImage, Mode=OneWay}"
+                                                                                 HidesPointer="{x:Bind HidesPointer, Mode=OneWay}"/>
                                                             <Grid Width="{x:Bind PlaceholderWidth, Mode=OneWay}" MinHeight="{x:Bind PlaceholderHeight, Mode=OneWay}"
                                                                   Visibility="{x:Bind ShowPlaceholder, Mode=OneWay}">
                                                                 <Rectangle Fill="{ThemeResource CardBg}" Stroke="{ThemeResource DashStroke}" StrokeThickness="1.5" StrokeDashArray="3 2" RadiusX="4" RadiusY="4"/>
@@ -455,8 +457,7 @@
                 <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
             <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
-                <controls:PixelImage x:Name="FullImage" HorizontalAlignment="Center"
-                                     PointerEntered="FullImage_PointerEntered" PointerExited="FullImage_PointerExited"/>
+                <controls:PixelImage x:Name="FullImage" HorizontalAlignment="Center" HidesPointer="True"/>
                 <Button Style="{StaticResource SubtleButtonStyle}" Margin="0,14,0,0" HorizontalAlignment="Center" Click="CopyFullText_Click"
                         ToolTipService.ToolTip="{x:Bind local:Loc.CopyTextTip}">
                     <TextBlock x:Name="FullText" FontFamily="{StaticResource Mono}" FontSize="18" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="900"/>
