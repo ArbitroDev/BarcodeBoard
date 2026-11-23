@@ -111,7 +111,7 @@ public sealed class CodeItemViewModel : Observable
     public bool IsSelected
     {
         get => _isSelected;
-        set { if (Set(ref _isSelected, value)) Raise(nameof(ShowRing)); }
+        set => Set(ref _isSelected, value);
     }
 
     public bool IsScanFocus
@@ -120,7 +120,6 @@ public sealed class CodeItemViewModel : Observable
         set
         {
             if (!Set(ref _isScanFocus, value)) return;
-            Raise(nameof(ShowRing));
             Raise(nameof(HidesPointer));
         }
     }
@@ -139,8 +138,6 @@ public sealed class CodeItemViewModel : Observable
     }
 
     public bool NotBlurred => !IsBlurred;
-    /// <summary>Anneau de sélection : code en cours de modification, ou code visé en mode scan.</summary>
-    public bool ShowRing => IsSelected || IsScanFocus;
     /// <summary>Le pointeur ne doit pas masquer le code pendant la lecture ; sans code affiché, il reste visible.</summary>
     public bool HidesPointer => IsScanFocus && !ShowPlaceholder;
     /// <summary>Code flouté en mode scan : estompé.</summary>

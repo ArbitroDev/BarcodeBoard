@@ -148,6 +148,7 @@ public sealed partial class MainWindow : Window
         };
         ApplySideWidth();
         foreach (var file in _startupFiles) OpenPath(file);
+        WatchCodeSelection();
         FocusComposer();
 #if DEBUG
         if (_isFirst) DebugScenario.Run(this, ViewModel);
@@ -458,6 +459,7 @@ public sealed partial class MainWindow : Window
             case nameof(MainViewModel.SelectedTab):
                 SyncSelectedTab();
                 WatchTitle();
+                WatchCodeSelection();
                 break;
             case nameof(MainViewModel.SideOpen):
                 ApplySideWidth();

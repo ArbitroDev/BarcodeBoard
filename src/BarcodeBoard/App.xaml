@@ -27,8 +27,6 @@
                     <SolidColorBrush x:Key="CardBg" Color="#FFFFFF"/>
                     <SolidColorBrush x:Key="CardDivider" Color="#F0F0F0"/>
                     <SolidColorBrush x:Key="CardBlurBorder" Color="#EDEDED"/>
-                    <SolidColorBrush x:Key="RowSelectedBg" Color="#FFFFFF"/>
-                    <SolidColorBrush x:Key="RowSelectedBorder" Color="#C9DBEE"/>
                     <SolidColorBrush x:Key="DashStroke" Color="#B5B5B5"/>
                     <SolidColorBrush x:Key="OverlayBg" Color="#E6FFFFFF"/>
                     <SolidColorBrush x:Key="OverlayBorder" Color="#DADADA"/>
@@ -57,8 +55,6 @@
                     <SolidColorBrush x:Key="CardBg" Color="#2B2B2B"/>
                     <SolidColorBrush x:Key="CardDivider" Color="#363636"/>
                     <SolidColorBrush x:Key="CardBlurBorder" Color="#303030"/>
-                    <SolidColorBrush x:Key="RowSelectedBg" Color="#2D2D2D"/>
-                    <SolidColorBrush x:Key="RowSelectedBorder" Color="#2F4E6B"/>
                     <SolidColorBrush x:Key="DashStroke" Color="#5E5E5E"/>
                     <SolidColorBrush x:Key="OverlayBg" Color="#E61F1F1F"/>
                     <SolidColorBrush x:Key="OverlayBorder" Color="#4A4A4A"/>
