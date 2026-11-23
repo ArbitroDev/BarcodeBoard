@@ -278,6 +278,11 @@ public sealed partial class MainWindow
     private void Drag_PointerMoved(object sender, PointerRoutedEventArgs e)
     {
         if (_drag is not { } drag || ViewModel.ScanMode || Tab is not { } tab) return;
+        if (!e.GetCurrentPoint(Root).Properties.IsLeftButtonPressed)
+        {
+            CancelDrag();
+            return;
+        }
         var p = e.GetCurrentPoint(Root).Position;
         if (!drag.Started)
         {
@@ -325,11 +330,16 @@ public sealed partial class MainWindow
             tab.Move(tab.Codes.IndexOf(drag.Item), tab.Codes.IndexOf(target) + (after ? 1 : 0));
     }
 
-    private void Drag_PointerCaptureLost(object sender, PointerRoutedEventArgs e)
+    private void Drag_PointerCaptureLost(object sender, PointerRoutedEventArgs e) => CancelDrag();
+
+    /// <summary>Glisser abandonné (Échap, souris perdue) : le code reste à sa place.</summary>
+    private bool CancelDrag()
     {
-        if (_drag is null) return;
+        if (_drag is not { } drag) return false;
         _drag = null;
+        drag.Source.ReleasePointerCaptures();
         ClearDropMarks();
+        return drag.Started;
     }
 
     private void ClearDropMarks()

@@ -20,6 +20,8 @@ public sealed partial class MainWindow
 
     private void Root_PreviewKeyDown(object sender, KeyRoutedEventArgs e)
     {
+        // Échap pendant un glisser de carte ou de ligne : le code reste à sa place.
+        if (e.Key == VirtualKey.Escape && CancelDrag()) { e.Handled = true; return; }
         if (HandleKey(e.Key, IsDown(VirtualKey.Control), IsDown(VirtualKey.Menu), IsDown(VirtualKey.Shift))) e.Handled = true;
     }
 
