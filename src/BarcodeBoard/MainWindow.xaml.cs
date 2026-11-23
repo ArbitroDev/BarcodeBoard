@@ -6,6 +6,7 @@ using Microsoft.UI.Composition.SystemBackdrops;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
 using Windows.Foundation.Collections;
@@ -366,10 +367,19 @@ public sealed partial class MainWindow : Window
     {
         if (TabItems.TryGetValue(tab, out var item)) return item;
         var header = new TabHeader(tab);
-        var menu = new MenuFlyout();
-        // Le menu est rempli à l'ouverture, dans la fenêtre où l'onglet se trouve alors.
-        menu.Opening += (_, _) => AppWindows.For(tab.Main)?.FillTabMenu(menu, tab, header);
-        item = new TabViewItem { Header = header, Tag = tab, IsClosable = true, ContextFlyout = menu };
+        item = new TabViewItem { Header = header, Tag = tab, IsClosable = true };
+        // Menu neuf à chaque ouverture, dans la fenêtre où l'onglet se trouve alors : un menu déjà ouvert dans une
+        // fenêtre ne s'ouvre pas forcément dans une autre, et l'onglet passe d'une fenêtre à l'autre.
+        item.ContextRequested += (sender, e) =>
+        {
+            if (AppWindows.For(tab.Main) is not { } window) return;
+            var target = (TabViewItem)sender;
+            var menu = new MenuFlyout();
+            window.FillTabMenu(menu, tab, header);
+            if (e.TryGetPosition(target, out var point)) menu.ShowAt(target, new FlyoutShowOptions { Position = point });
+            else menu.ShowAt(target);
+            e.Handled = true;
+        };
         TabItems[tab] = item;
         return item;
     }
