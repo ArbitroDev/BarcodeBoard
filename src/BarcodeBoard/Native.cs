@@ -80,6 +80,19 @@ internal static class Native
     [DllImport("user32.dll")] public static extern bool GetWindowPlacement(IntPtr hwnd, ref WINDOWPLACEMENT placement);
     [DllImport("user32.dll")] public static extern bool SetWindowPlacement(IntPtr hwnd, ref WINDOWPLACEMENT placement);
     [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hwnd);
+    [DllImport("dwmapi.dll")] private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int value, int size);
+
+    private const int DWMWA_CLOAK = 13;
+
+    /// <summary>
+    /// Fenêtre voilée : Windows la tient pour affichée et elle se dessine, mais rien n'en apparaît à l'écran
+    /// (ni fenêtre vide, ni passage au premier plan visible).
+    /// </summary>
+    public static void Cloak(IntPtr hwnd, bool cloaked)
+    {
+        int value = cloaked ? 1 : 0;
+        DwmSetWindowAttribute(hwnd, DWMWA_CLOAK, ref value, sizeof(int));
+    }
 
     /// <summary>Position normale (non agrandie) de la fenêtre, en pixels physiques.</summary>
     public static RECT? NormalPosition(IntPtr hwnd)

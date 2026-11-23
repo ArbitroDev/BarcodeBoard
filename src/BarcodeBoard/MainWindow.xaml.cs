@@ -69,9 +69,14 @@ public sealed partial class MainWindow : Window
         ExtendsContentIntoTitleBar = true;
         AppWindow.SetIcon(IconPath);
         // TabView demande cette fenêtre dès qu'on appuie sur un onglet (le geste peut devenir un arrachage), l'affiche
-        // un instant cachée derrière l'autre, puis la ferme si l'onglet ne sort pas : elle ne doit pas apparaître dans
-        // la barre des tâches. Elle y entre si l'onglet est vraiment arraché (Tabs_TabTearOutRequested).
-        if (tearOut) AppWindow.IsShownInSwitchers = false;
+        // un instant pour qu'elle se dessine, puis la ferme si l'onglet ne sort pas. Affichée avant son premier rendu,
+        // elle apparaissait vide et noire au premier plan : elle reste voilée et hors de la barre des tâches tant
+        // que l'onglet n'est pas vraiment arraché (Tabs_TabTearOutRequested).
+        if (tearOut)
+        {
+            AppWindow.IsShownInSwitchers = false;
+            Native.Cloak(_hwnd, true);
+        }
 
         // Mica Alt (Windows 11), le matériau des applications à onglets ; Windows 10 garde un fond opaque.
         _mica = !NoMicaRequested() && MicaController.IsSupported();
@@ -651,6 +656,7 @@ public sealed partial class MainWindow : Window
         var target = _tearOutWindow ?? AppWindows.For(args.NewWindowId);
         _tearOutWindow = null;
         if (target is null) return;
+        Native.Cloak(target._hwnd, false);
         target.AppWindow.IsShownInSwitchers = true;
         foreach (var item in args.Tabs.OfType<TabViewItem>())
         {
