@@ -114,10 +114,10 @@ internal static class DebugScenario
         var bitmap = CreateCompatibleBitmap(screen, w, h);
         var old = SelectObject(dc, bitmap);
         PrintWindow(hwnd, dc, PW_RENDERFULLCONTENT);
+        SelectObject(dc, old); // GetDIBits exige un bitmap qui n'est sélectionné dans aucun contexte
         var info = new BITMAPINFOHEADER { biSize = 40, biWidth = w, biHeight = -h, biPlanes = 1, biBitCount = 32 };
         var pixels = new byte[w * h * 4];
         GetDIBits(dc, bitmap, 0, (uint)h, pixels, ref info, 0);
-        SelectObject(dc, old);
         DeleteObject(bitmap);
         DeleteDC(dc);
         ReleaseDC(IntPtr.Zero, screen);
