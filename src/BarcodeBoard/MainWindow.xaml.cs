@@ -1,21 +1,20 @@
 using System.Collections.Specialized;
 using System.ComponentModel;
-using System.Runtime.InteropServices;
 using Microsoft.UI;
 using Microsoft.UI.Composition.SystemBackdrops;
-using Microsoft.UI.Input;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Media;
+using Windows.ApplicationModel.DataTransfer;
 using Windows.Foundation.Collections;
 using Windows.Graphics;
 
 namespace BarcodeBoard;
 
 /// <summary>
-/// Une fenêtre : onglets dans la barre de titre (TabView natif, arrachage et fusion entre fenêtres), Mica Alt
+/// Une fenêtre : onglets dans la barre de titre (TabView natif, glissés d'une fenêtre à l'autre), Mica Alt
 /// sous Windows 11, et le contenu de l'onglet actif (voir les autres parties de la classe).
 /// </summary>
 public sealed partial class MainWindow : Window
@@ -24,8 +23,8 @@ public sealed partial class MainWindow : Window
     private const double DefaultWidth = 1240, DefaultHeight = 780, MinWidth = 760, MinHeight = 480;
 
     /// <summary>
-    /// L'élément d'onglet de chaque onglet, commun à toutes les fenêtres : un onglet arraché ou fusionné garde le
-    /// même élément (TabView suit cet objet pendant tout le glisser).
+    /// L'élément d'onglet de chaque onglet, commun à toutes les fenêtres : un onglet passé dans une autre fenêtre
+    /// garde le même élément.
     /// </summary>
     private static readonly Dictionary<TabViewModel, TabViewItem> TabItems = [];
 
@@ -40,14 +39,8 @@ public sealed partial class MainWindow : Window
     /// <summary>Onglets dont la fermeture est en cours (question affichée) : Ctrl+W répété ne les ferme pas deux fois.</summary>
     private readonly HashSet<TabViewModel> _closingTabs = [];
     private TabViewModel? _titleTab;
-    /// <summary>Fenêtre créée pour l'arrachage en cours (TabTearOutWindowRequested), en attente de son onglet.</summary>
-    private MainWindow? _tearOutWindow;
-
-    /// <summary>Point de l'onglet saisi au début du glisser (pixels physiques depuis son coin haut gauche).</summary>
-    private static PointInt32? _tabGrab;
-    /// <summary>Onglet arraché pendant le glisser en cours, et la fenêtre qui l'emporte sous le pointeur.</summary>
-    private static (TabViewItem Item, MainWindow Window)? _tornOut;
-    private bool _windowRectHooked;
+    /// <summary>Onglet en cours de glisser, et point saisi (pixels physiques depuis son coin haut gauche).</summary>
+    private static (TabViewItem Item, PointInt32 Grab)? _draggedTab;
 
     public MainViewModel ViewModel { get; } = new();
 
@@ -56,29 +49,18 @@ public sealed partial class MainWindow : Window
     /// <param name="startupFiles">Fichiers .codes à ouvrir une fois la fenêtre affichée.</param>
     /// <param name="adopted">Onglet sorti d'une autre fenêtre : la nouvelle fenêtre ne contient que lui.</param>
     /// <param name="isFirst">Première fenêtre de l'application : elle reprend la position et l'état enregistrés.</param>
-    /// <param name="tearOut">Fenêtre demandée par TabView pour un arrachage possible : vide, placée et affichée par TabView.</param>
-    public MainWindow(IReadOnlyList<string>? startupFiles = null, TabViewModel? adopted = null, bool isFirst = false, bool tearOut = false)
+    public MainWindow(IReadOnlyList<string>? startupFiles = null, TabViewModel? adopted = null, bool isFirst = false)
     {
         _startupFiles = startupFiles ?? [];
         _isFirst = isFirst;
         if (isFirst) Theme.Apply(ThemeSetting.Parse(_settings.Theme));
         InitializeComponent();
         _hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
-        HookTabRightClick();
         AppWindows.Register(this);
 
         // Onglets dans la barre de titre ; Windows garde ses boutons Réduire / Agrandir / Fermer.
         ExtendsContentIntoTitleBar = true;
         AppWindow.SetIcon(IconPath);
-        // TabView demande cette fenêtre dès qu'on appuie sur un onglet (le geste peut devenir un arrachage), l'affiche
-        // un instant pour qu'elle se dessine, puis la ferme si l'onglet ne sort pas. Affichée avant son premier rendu,
-        // elle apparaissait vide et noire au premier plan : elle reste voilée et hors de la barre des tâches tant
-        // que l'onglet n'est pas vraiment arraché (Tabs_TabTearOutRequested).
-        if (tearOut)
-        {
-            AppWindow.IsShownInSwitchers = false;
-            Native.Cloak(_hwnd, true);
-        }
 
         // Mica Alt (Windows 11), le matériau des applications à onglets ; Windows 10 garde un fond opaque.
         _mica = !NoMicaRequested() && MicaController.IsSupported();
@@ -89,14 +71,14 @@ public sealed partial class MainWindow : Window
         ViewModel.Tabs.CollectionChanged += OnTabsChanged;
         ViewModel.PropertyChanged += Vm_PropertyChanged;
         if (adopted is not null) ViewModel.Adopt(adopted, 0);
-        else if (!tearOut) ViewModel.NewTab();
+        else ViewModel.NewTab();
 
         ApplyTheme();
         Theme.Changed += ApplyTheme;
         Root.ActualThemeChanged += (_, _) => ApplyLayers();
 
         if (isFirst) RestorePlacement();
-        else if (!tearOut) PlaceNextToLastWindow();
+        else PlaceNextToLastWindow();
         if (AppWindow.Presenter is OverlappedPresenter presenter)
         {
             presenter.PreferredMinimumWidth = (int)(MinWidth * WindowScale);
@@ -125,8 +107,7 @@ public sealed partial class MainWindow : Window
 
     /// <summary>
     /// Fenêtre agrandie : les onglets touchent le haut de l'écran, comme dans les navigateurs (le pointeur poussé
-    /// tout en haut tombe sur un onglet). Sinon, TabView garde sa marge haute (TabViewHeaderPadding), qui laisse
-    /// saisir la fenêtre au-dessus des onglets.
+    /// tout en haut tombe sur un onglet). Sinon, TabView garde sa marge haute (TabViewHeaderPadding).
     /// </summary>
     private void UpdateTabStripPadding()
     {
@@ -156,9 +137,6 @@ public sealed partial class MainWindow : Window
         SetTitleBar(CustomDragRegion);
         CustomDragRegion.MinWidth = 188;
         UpdateTabStripPadding();
-        var nonClient = InputNonClientPointerSource.GetForWindowId(AppWindow.Id);
-        nonClient.EnteringMoveSize += OnEnteringMoveSize;
-        nonClient.ExitedMoveSize += (_, _) => { _tabGrab = null; _tornOut = null; };
         ViewModel.DpiScale = Root.XamlRoot.RasterizationScale;
         Root.XamlRoot.Changed += (_, _) =>
         {
@@ -379,8 +357,8 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
-    /// L'onglet sous un point de l'écran (pixels physiques), d'après sa seule position horizontale : la bande peut
-    /// être saisie dans la marge au-dessus des onglets. Null hors des onglets ou plus bas qu'eux.
+    /// L'onglet sous un point de l'écran (pixels physiques), d'après sa seule position horizontale. Null hors des
+    /// onglets ou plus bas qu'eux.
     /// </summary>
     private (TabViewItem Item, RectInt32 Bounds)? TabAtScreenPoint(PointInt32 point)
     {
@@ -393,92 +371,6 @@ public sealed partial class MainWindow : Window
         }
         return null;
     }
-
-    // ---- Clics sur un onglet ----
-    // Pour l'arrachage, TabView déclare la bande d'onglets comme barre de titre : Windows y traite les clics
-    // lui-même. Les messages de la fenêtre sont donc lus avant Windows :
-    // - clic droit sur un onglet : son menu, au lieu du menu système (Restaurer, Déplacer…), qui reste ailleurs
-    //   dans la barre de titre ;
-    // - appui gauche sur un onglet : TabView démarre à chaque appui un glisser de barre de titre (fenêtre
-    //   d'arrachage créée, largeur des onglets figée), que Windows ne termine pas sur un simple clic : TabView
-    //   restait bloqué en « glisser en cours », sans plus jamais recalculer la largeur des onglets. Le glisser ne
-    //   lui est donc transmis qu'une fois le pointeur déplacé (DragDetect) ; un simple clic sélectionne l'onglet.
-
-    private const int GWLP_WNDPROC = -4;
-    private const uint WM_CONTEXTMENU = 0x007B, WM_NCDESTROY = 0x0082, WM_NCLBUTTONDOWN = 0x00A1,
-        WM_NCRBUTTONDOWN = 0x00A4, WM_NCRBUTTONUP = 0x00A5;
-    private const int HTCAPTION = 2;
-
-    private delegate IntPtr WindowProc(IntPtr hwnd, uint message, IntPtr wParam, IntPtr lParam);
-    private WindowProc? _windowProc;
-    private IntPtr _previousWindowProc;
-
-    private void HookTabRightClick()
-    {
-        _windowProc = OnWindowMessage;
-        _previousWindowProc = SetWindowLongPtr(_hwnd, GWLP_WNDPROC, Marshal.GetFunctionPointerForDelegate(_windowProc));
-    }
-
-    private IntPtr OnWindowMessage(IntPtr hwnd, uint message, IntPtr wParam, IntPtr lParam)
-    {
-        switch (message)
-        {
-            case WM_NCLBUTTONDOWN when wParam == HTCAPTION:
-            {
-                var pressed = new PointInt32((short)(lParam.ToInt64() & 0xFFFF), (short)((lParam.ToInt64() >> 16) & 0xFFFF));
-                if (TabAtScreenPoint(pressed) is not { } pressedTab || IsOverCloseButton(pressedTab.Item, pressed)) break;
-                // Le pointeur a bougé avant d'être relâché : glisser (réordonner, arracher), confié à TabView.
-                if (DragDetect(hwnd, new Native.POINT { X = pressed.X, Y = pressed.Y })) break;
-                Tabs.SelectedItem = pressedTab.Item;
-                return IntPtr.Zero;
-            }
-            case WM_NCRBUTTONDOWN or WM_NCRBUTTONUP or WM_CONTEXTMENU when lParam != -1:
-                // Coordonnées d'écran signées (écran à gauche ou au-dessus du principal) dans lParam.
-                var point = new PointInt32((short)(lParam.ToInt64() & 0xFFFF), (short)((lParam.ToInt64() >> 16) & 0xFFFF));
-                if (TabAtScreenPoint(point) is not { } hit) break;
-                var (item, bounds) = hit;
-                if (message == WM_NCRBUTTONUP)
-                {
-                    var scale = Root.XamlRoot?.RasterizationScale ?? 1;
-                    var position = new Windows.Foundation.Point((point.X - bounds.X) / scale, (point.Y - bounds.Y) / scale);
-                    DispatcherQueue.TryEnqueue(() => ShowTabMenu(item, position));
-                }
-                return IntPtr.Zero;
-            case WM_NCDESTROY:
-                SetWindowLongPtr(hwnd, GWLP_WNDPROC, _previousWindowProc);
-                break;
-        }
-        return CallWindowProc(_previousWindowProc, hwnd, message, wParam, lParam);
-    }
-
-    /// <summary>La croix de l'onglet garde son fonctionnement d'origine.</summary>
-    private bool IsOverCloseButton(TabViewItem item, PointInt32 point)
-    {
-        if (Root.XamlRoot is not { } root || FindNamed(item, "CloseButton") is not { } button) return false;
-        var r = root.CoordinateConverter.ConvertLocalToScreen(
-            button.TransformToVisual(null).TransformBounds(new Windows.Foundation.Rect(0, 0, button.ActualWidth, button.ActualHeight)));
-        return point.X >= r.X && point.X < r.X + r.Width && point.Y >= r.Y && point.Y < r.Y + r.Height;
-    }
-
-    private static FrameworkElement? FindNamed(DependencyObject parent, string name)
-    {
-        for (int i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
-        {
-            var child = VisualTreeHelper.GetChild(parent, i);
-            if (child is FrameworkElement { Name: var n } element && n == name) return element;
-            if (FindNamed(child, name) is { } found) return found;
-        }
-        return null;
-    }
-
-    [DllImport("user32.dll")]
-    private static extern bool DragDetect(IntPtr hwnd, Native.POINT point);
-
-    [DllImport("user32.dll", EntryPoint = "SetWindowLongPtrW")]
-    private static extern IntPtr SetWindowLongPtr(IntPtr hwnd, int index, IntPtr value);
-
-    [DllImport("user32.dll", EntryPoint = "CallWindowProcW")]
-    private static extern IntPtr CallWindowProc(IntPtr previous, IntPtr hwnd, uint message, IntPtr wParam, IntPtr lParam);
 
     /// <summary>Nom de l'onglet, suivi d'un point s'il a des modifications non enregistrées.</summary>
     private static string HeaderText(TabViewModel tab) => tab.IsDirty ? $"{tab.Name} •" : tab.Name;
@@ -711,8 +603,8 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Déplace un élément d'onglet d'un TabView à l'autre, comme l'exemple officiel (retiré de l'un, inséré dans
-    /// l'autre : le même objet, que TabView suit pendant un glisser), puis met les deux modèles à jour.
+    /// Déplace un élément d'onglet d'un TabView à l'autre (retiré de l'un, inséré dans l'autre : le même objet),
+    /// puis met les deux modèles à jour.
     /// </summary>
     private static void MoveTabItem(TabViewItem item, MainWindow? from, MainWindow to, int index)
     {
@@ -747,94 +639,86 @@ public sealed partial class MainWindow : Window
         return null;
     }
 
-    // ---- Arrachage et fusion : l'exemple officiel (galerie WinUI, TabViewWindowingSamplePage) ----
+    // ---- Glisser un onglet : sa vignette sous le pointeur, comme dans l'Explorateur de fichiers ----
+    // Glisser-déposer de TabView (CanDragTabs) : Windows montre la vignette de l'onglet sous le pointeur. Lâché le
+    // long de la bande, l'onglet change de place (TabView) ; sur la bande d'une autre fenêtre, il y entre et sa
+    // fenêtre vidée se ferme ; ailleurs, il part dans une nouvelle fenêtre placée pour qu'il tombe sous le pointeur
+    // (seul onglet de sa fenêtre : c'est elle qui vient sous le pointeur). Lâché sur sa propre fenêtre : rien.
 
-    /// <summary>Un onglet quitte la bande : TabView demande une fenêtre neuve, qu'il placera et affichera.</summary>
-    private void Tabs_TabTearOutWindowRequested(TabView sender, TabViewTabTearOutWindowRequestedEventArgs args) => Guard(() =>
+    /// <summary>Format du glisser-déposer qui désigne un onglet de l'application.</summary>
+    private const string TabDragFormat = "BarcodeBoard.Tab";
+
+    private void Tabs_TabDragStarting(TabView sender, TabViewTabDragStartingEventArgs args)
     {
         CommitPendingRenames();
-        _tearOutWindow = new MainWindow(tearOut: true);
-        args.NewWindowId = _tearOutWindow.AppWindow.Id;
+        args.Data.SetData(TabDragFormat, "tab");
+        args.Data.RequestedOperation = DataPackageOperation.Move;
+        var grab = new PointInt32(0, 0);
+        if (Native.GetCursorPos(out var cursor) && TabAtScreenPoint(new PointInt32(cursor.X, cursor.Y)) is { } hit && hit.Item == args.Tab)
+            grab = new PointInt32(cursor.X - hit.Bounds.X, Math.Clamp(cursor.Y - hit.Bounds.Y, 0, Math.Max(0, hit.Bounds.Height - 1)));
+        _draggedTab = (args.Tab, grab);
+    }
+
+    /// <summary>Glisser fini sur une bande d'onglets (la sienne ou une autre) : plus rien à faire.</summary>
+    private void Tabs_TabDragCompleted(TabView sender, TabViewTabDragCompletedEventArgs args)
+    {
+        if (args.DropResult != DataPackageOperation.None) _draggedTab = null;
+    }
+
+    /// <summary>Onglet d'une autre fenêtre au-dessus de la bande : il peut y entrer (le réordonnancement reste à TabView).</summary>
+    private void Tabs_TabStripDragOver(object sender, DragEventArgs e)
+    {
+        if (_draggedTab is { } dragged && e.DataView.Contains(TabDragFormat) && ParentTabView(dragged.Item) != Tabs)
+            e.AcceptedOperation = DataPackageOperation.Move;
+    }
+
+    /// <summary>Onglet d'une autre fenêtre lâché sur la bande : il entre à l'endroit du lâcher.</summary>
+    private void Tabs_TabStripDrop(object sender, DragEventArgs e) => Guard(() =>
+    {
+        if (_draggedTab is not { } dragged || !e.DataView.Contains(TabDragFormat) || TabOf(dragged.Item) is not { } tab
+            || AppWindows.For(tab.Main) is not { } source || source == this) return;
+        _draggedTab = null;
+        int index = Tabs.TabItems.Count;
+        for (int i = 0; i < Tabs.TabItems.Count; i++)
+        {
+            if (Tabs.TabItems[i] is not TabViewItem other) continue;
+            if (e.GetPosition(other).X < other.ActualWidth / 2) { index = i; break; }
+        }
+        MoveTabItem(dragged.Item, source, this, index);
+        CloseIfEmpty(source);
+        Activate();
     });
 
-    /// <summary>La fenêtre neuve est prête : l'onglet y passe.</summary>
-    private void Tabs_TabTearOutRequested(TabView sender, TabViewTabTearOutRequestedEventArgs args) => Guard(() =>
+    /// <summary>Onglet lâché hors de toute bande d'onglets : nouvelle fenêtre sous le pointeur.</summary>
+    private void Tabs_TabDroppedOutside(TabView sender, TabViewTabDroppedOutsideEventArgs args) => Guard(() =>
     {
-        // Fenêtre demandée par cette fenêtre ; sinon (onglet fusionné puis arraché à nouveau dans le même geste)
-        // celle que TabView désigne.
-        var target = _tearOutWindow ?? AppWindows.For(args.NewWindowId);
-        _tearOutWindow = null;
-        if (target is null) return;
-        Native.Cloak(target._hwnd, false);
-        target.AppWindow.IsShownInSwitchers = true;
-        foreach (var item in args.Tabs.OfType<TabViewItem>())
-        {
-            var source = TabOf(item) is { } tab ? AppWindows.For(tab.Main) : null;
-            MoveTabItem(item, source, target, target.Tabs.TabItems.Count);
-            _tornOut = (item, target);
-        }
-        CloseIfEmpty(this);
-    });
+        var grab = _draggedTab?.Grab ?? new PointInt32(0, 0);
+        _draggedTab = null;
+        if (TabOf(args.Tab) is not { } tab || !Native.GetCursorPos(out var cursor) || Root.XamlRoot is not { } root) return;
+        var position = AppWindow.Position;
+        var size = AppWindow.Size;
+        if (cursor.X >= position.X && cursor.X < position.X + size.Width && cursor.Y >= position.Y && cursor.Y < position.Y + size.Height)
+            return;
 
-    /// <summary>
-    /// Début d'un glisser dans la barre de titre : le point saisi de l'onglet est noté, pour le garder sous le
-    /// pointeur s'il est arraché (OnWindowRectChanging).
-    /// </summary>
-    private void OnEnteringMoveSize(InputNonClientPointerSource sender, EnteringMoveSizeEventArgs args)
-    {
-        _tabGrab = null;
-        _tornOut = null;
-        // Abonnement au premier glisser : après celui de TabView (pris au chargement), pour corriger sa position.
-        if (!_windowRectHooked)
+        // Décalage d'un onglet par rapport au coin de la fenêtre : l'onglet déplacé, ou le premier, qu'il sera seul
+        // à occuper dans la nouvelle fenêtre (même mise en page).
+        PointInt32 Offset(UIElement element)
         {
-            sender.WindowRectChanging += OnWindowRectChanging;
-            _windowRectHooked = true;
+            var screen = root.CoordinateConverter.ConvertLocalToScreen(element.TransformToVisual(null).TransformPoint(new Windows.Foundation.Point(0, 0)));
+            return new PointInt32(screen.X - position.X, screen.Y - position.Y);
         }
-        if (args.MoveSizeOperation != MoveSizeOperation.Move || Root.XamlRoot is not { } root) return;
-        var pointer = args.PointerScreenPoint;
-        foreach (var item in Tabs.TabItems.OfType<TabViewItem>())
+
+        if (ViewModel.Tabs.Count == 1)
         {
-            var r = root.CoordinateConverter.ConvertLocalToScreen(
-                item.TransformToVisual(null).TransformBounds(new Windows.Foundation.Rect(0, 0, item.ActualWidth, item.ActualHeight)));
-            if (pointer.X < r.X || pointer.X >= r.X + r.Width) continue;
-            // Saisi dans la marge au-dessus des onglets : le point est ramené sur l'onglet.
-            _tabGrab = new PointInt32(pointer.X - r.X, Math.Clamp(pointer.Y - r.Y, 0, Math.Max(0, r.Height - 1)));
+            var own = Offset(args.Tab);
+            AppWindow.Move(new PointInt32(cursor.X - grab.X - own.X, cursor.Y - grab.Y - own.Y));
             return;
         }
-    }
-
-    /// <summary>
-    /// La fenêtre placée par TabView ne gardait pas l'onglet arraché sous le pointeur. Elle est placée pour que le
-    /// point saisi de l'onglet y reste ; tant que la nouvelle fenêtre n'est pas mise en page, TabView décide.
-    /// </summary>
-    private void OnWindowRectChanging(InputNonClientPointerSource sender, WindowRectChangingEventArgs args)
-    {
-        if (_tornOut is not { } tornOut || _tabGrab is not { } grab) return;
-        var (item, window) = tornOut;
-        // Onglet fusionné dans une autre fenêtre entre-temps : TabView reprend la main.
-        if (ParentTabView(item) != window.Tabs || item.XamlRoot is not { } root || item.ActualWidth <= 0) return;
-        var tab = root.CoordinateConverter.ConvertLocalToScreen(item.TransformToVisual(null).TransformPoint(new Windows.Foundation.Point(0, 0)));
-        var position = window.AppWindow.Position;
-        var pointer = args.PointerScreenPoint;
-        var rect = args.NewWindowRect;
-        rect.X = position.X + (pointer.X - grab.X - tab.X);
-        rect.Y = position.Y + (pointer.Y - grab.Y - tab.Y);
-        args.NewWindowRect = rect;
-    }
-
-    private void Tabs_ExternalTornOutTabsDropping(TabView sender, TabViewExternalTornOutTabsDroppingEventArgs args) =>
-        args.AllowDrop = true;
-
-    /// <summary>Onglet arraché amené sur la bande de cette fenêtre : il y entre ; sa fenêtre vidée se ferme.</summary>
-    private void Tabs_ExternalTornOutTabsDropped(TabView sender, TabViewExternalTornOutTabsDroppedEventArgs args) => Guard(() =>
-    {
-        int position = 0;
-        foreach (var item in args.Tabs.OfType<TabViewItem>())
-        {
-            var source = TabOf(item) is { } tab ? AppWindows.For(tab.Main) : null;
-            MoveTabItem(item, source, this, args.DropIndex + position++);
-            if (source is not null && source != this) CloseIfEmpty(source);
-        }
+        var first = Tabs.TabItems.OfType<TabViewItem>().FirstOrDefault() is { } firstTab ? Offset(firstTab) : new PointInt32(0, 0);
+        ViewModel.Release(tab);
+        var window = new MainWindow(adopted: tab);
+        window.AppWindow.Move(new PointInt32(cursor.X - grab.X - first.X, cursor.Y - grab.Y - first.Y));
+        window.Activate();
     });
 
     /// <summary>
@@ -850,8 +734,6 @@ public sealed partial class MainWindow : Window
             DispatcherQueue.TryEnqueue(() => Run(Dialogs.Show(Root, Loc.AppName, Loc.UnexpectedError(ex.Message))));
         }
     }
-
-    // ---- Arrachage et fusion (TabView, Windows App SDK 1.6 et plus) ----
 
     // ================= Outils =================
 
