@@ -1,5 +1,6 @@
 using System.Collections.Specialized;
 using System.ComponentModel;
+using System.Runtime.InteropServices;
 using Microsoft.UI;
 using Microsoft.UI.Composition.SystemBackdrops;
 using Microsoft.UI.Input;
@@ -63,6 +64,7 @@ public sealed partial class MainWindow : Window
         if (isFirst) Theme.Apply(ThemeSetting.Parse(_settings.Theme));
         InitializeComponent();
         _hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+        HookTabRightClick();
         AppWindows.Register(this);
 
         // Onglets dans la barre de titre ; Windows garde ses boutons Réduire / Agrandir / Fermer.
@@ -359,17 +361,86 @@ public sealed partial class MainWindow : Window
         // fenêtre ne s'ouvre pas forcément dans une autre, et l'onglet passe d'une fenêtre à l'autre.
         item.ContextRequested += (sender, e) =>
         {
-            if (AppWindows.For(tab.Main) is not { } window) return;
             var target = (TabViewItem)sender;
-            var menu = new MenuFlyout();
-            window.FillTabMenu(menu, tab);
-            if (e.TryGetPosition(target, out var point)) menu.ShowAt(target, new FlyoutShowOptions { Position = point });
-            else menu.ShowAt(target);
+            ShowTabMenu(target, e.TryGetPosition(target, out var point) ? point : null);
             e.Handled = true;
         };
         TabItems[tab] = item;
         return item;
     }
+
+    private static void ShowTabMenu(TabViewItem item, Windows.Foundation.Point? position)
+    {
+        if (TabOf(item) is not { } tab || AppWindows.For(tab.Main) is not { } window) return;
+        var menu = new MenuFlyout();
+        window.FillTabMenu(menu, tab);
+        if (position is { } point) menu.ShowAt(item, new FlyoutShowOptions { Position = point });
+        else menu.ShowAt(item);
+    }
+
+    /// <summary>
+    /// L'onglet sous un point de l'écran (pixels physiques), d'après sa seule position horizontale : la bande peut
+    /// être saisie dans la marge au-dessus des onglets. Null hors des onglets ou plus bas qu'eux.
+    /// </summary>
+    private (TabViewItem Item, RectInt32 Bounds)? TabAtScreenPoint(PointInt32 point)
+    {
+        if (Root.XamlRoot is not { } root) return null;
+        foreach (var item in Tabs.TabItems.OfType<TabViewItem>())
+        {
+            var r = root.CoordinateConverter.ConvertLocalToScreen(
+                item.TransformToVisual(null).TransformBounds(new Windows.Foundation.Rect(0, 0, item.ActualWidth, item.ActualHeight)));
+            if (point.X >= r.X && point.X < r.X + r.Width && point.Y < r.Y + r.Height) return (item, r);
+        }
+        return null;
+    }
+
+    // ---- Clic droit sur un onglet ----
+    // Pour l'arrachage, TabView déclare la bande d'onglets comme barre de titre : Windows y traite le clic droit
+    // lui-même et ouvre le menu système (Restaurer, Déplacer…) au lieu du menu de l'onglet. Les messages de la
+    // fenêtre sont donc lus avant Windows : un clic droit sur un onglet ouvre son menu ; ailleurs dans la barre de
+    // titre, le menu système reste.
+
+    private const int GWLP_WNDPROC = -4;
+    private const uint WM_CONTEXTMENU = 0x007B, WM_NCDESTROY = 0x0082, WM_NCRBUTTONDOWN = 0x00A4, WM_NCRBUTTONUP = 0x00A5;
+
+    private delegate IntPtr WindowProc(IntPtr hwnd, uint message, IntPtr wParam, IntPtr lParam);
+    private WindowProc? _windowProc;
+    private IntPtr _previousWindowProc;
+
+    private void HookTabRightClick()
+    {
+        _windowProc = OnWindowMessage;
+        _previousWindowProc = SetWindowLongPtr(_hwnd, GWLP_WNDPROC, Marshal.GetFunctionPointerForDelegate(_windowProc));
+    }
+
+    private IntPtr OnWindowMessage(IntPtr hwnd, uint message, IntPtr wParam, IntPtr lParam)
+    {
+        switch (message)
+        {
+            case WM_NCRBUTTONDOWN or WM_NCRBUTTONUP or WM_CONTEXTMENU when lParam != -1:
+                // Coordonnées d'écran signées (écran à gauche ou au-dessus du principal) dans lParam.
+                var point = new PointInt32((short)(lParam.ToInt64() & 0xFFFF), (short)((lParam.ToInt64() >> 16) & 0xFFFF));
+                if (TabAtScreenPoint(point) is not { } hit) break;
+                var (item, bounds) = hit;
+                if (message == WM_NCRBUTTONUP)
+                {
+                    var scale = Root.XamlRoot?.RasterizationScale ?? 1;
+                    var position = new Windows.Foundation.Point((point.X - bounds.X) / scale, (point.Y - bounds.Y) / scale);
+                    DispatcherQueue.TryEnqueue(() => ShowTabMenu(item, position));
+                }
+                return IntPtr.Zero;
+            case WM_NCDESTROY:
+                SetWindowLongPtr(hwnd, GWLP_WNDPROC, _previousWindowProc);
+                break;
+        }
+        return CallWindowProc(_previousWindowProc, hwnd, message, wParam, lParam);
+    }
+
+    [DllImport("user32.dll", EntryPoint = "SetWindowLongPtrW")]
+    private static extern IntPtr SetWindowLongPtr(IntPtr hwnd, int index, IntPtr value);
+
+    [DllImport("user32.dll", EntryPoint = "CallWindowProcW")]
+    private static extern IntPtr CallWindowProc(IntPtr previous, IntPtr hwnd, uint message, IntPtr wParam, IntPtr lParam);
 
     /// <summary>Nom de l'onglet, suivi d'un point s'il a des modifications non enregistrées.</summary>
     private static string HeaderText(TabViewModel tab) => tab.IsDirty ? $"{tab.Name} •" : tab.Name;
