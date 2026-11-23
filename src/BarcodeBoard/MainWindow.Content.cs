@@ -156,12 +156,12 @@ public sealed partial class MainWindow
     // ================= Cartes =================
 
     /// <summary>
-    /// Largeur dont dispose un code dans sa carte : la grille moins la marge (16), le remplissage (28) et le bord (2)
-    /// de la carte. Le remplissage du ScrollViewer est déjà hors de ViewportWidth (marge de son contenu).
-    /// Un code plus large s'affine ou affiche un message, jamais coupé.
+    /// Largeur dont dispose un code dans sa carte : la zone visible moins la marge gauche de la grille (10), puis la
+    /// marge (16), le remplissage (28) et le bord (2) de la carte. Le remplissage du ScrollViewer est déjà hors de
+    /// ViewportWidth (marge de son contenu). Un code plus large s'affine ou affiche un message, jamais coupé.
     /// </summary>
     private void CodesScroll_SizeChanged(object sender, SizeChangedEventArgs e) =>
-        ViewModel.CodeMaxWidth = Math.Max(0, CodesScroll.ViewportWidth - 46);
+        ViewModel.CodeMaxWidth = Math.Max(0, CodesScroll.ViewportWidth - CodesGrid.Margin.Left - 46);
 
     private void Card_PointerPressed(object sender, PointerRoutedEventArgs e)
     {

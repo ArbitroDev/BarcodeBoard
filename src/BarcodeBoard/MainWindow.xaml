@@ -355,11 +355,13 @@
                         </Grid>
                     </Border>
 
-                    <!-- Grille des codes. Prend le clavier en mode scan (la douchette « tape » ce qu'elle lit). -->
+                    <!-- Grille des codes. Prend le clavier en mode scan (la douchette « tape » ce qu'elle lit).
+                         Retrait gauche de 20 : 10 de remplissage et 10 de marge de la grille. Le repère « avant » d'une carte est
+                         dessiné 10 à sa gauche : il doit rester dans le contenu, car le remplissage du ScrollViewer est découpé. -->
                     <ScrollViewer x:Name="CodesScroll" Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
-                                  Padding="20,14,4,8" IsTabStop="True" UseSystemFocusVisuals="False" SizeChanged="CodesScroll_SizeChanged">
+                                  Padding="10,14,4,8" IsTabStop="True" UseSystemFocusVisuals="False" SizeChanged="CodesScroll_SizeChanged">
                         <Grid>
-                            <ItemsControl x:Name="CodesGrid" ItemsSource="{x:Bind ViewModel.SelectedTab.Codes, Mode=OneWay}">
+                            <ItemsControl x:Name="CodesGrid" Margin="10,0,0,0" ItemsSource="{x:Bind ViewModel.SelectedTab.Codes, Mode=OneWay}">
                                 <ItemsControl.ItemsPanel>
                                     <ItemsPanelTemplate>
                                         <controls:WrapPanel/>
