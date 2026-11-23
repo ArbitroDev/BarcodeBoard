@@ -433,7 +433,7 @@
 
         <!-- ===================== Plein écran ===================== -->
         <!-- Sous la barre de titre : les boutons Réduire / Agrandir / Fermer restent visibles et utilisables -->
-        <Grid x:Name="FullView" Grid.Row="1" Background="{ThemeResource FullBg}" Visibility="Collapsed">
+        <Grid x:Name="FullView" Grid.Row="1" Background="{ThemeResource FullBg}" Visibility="Collapsed" SizeChanged="FullView_SizeChanged">
             <Grid.RowDefinitions>
                 <RowDefinition Height="*"/>
                 <RowDefinition Height="Auto"/>

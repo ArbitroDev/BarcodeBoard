@@ -344,7 +344,8 @@ public sealed partial class MainWindow
         if (item.HasError) return; // pas de code à montrer en grand (un code trop large pour sa carte, lui, peut l'être)
         _fullItem = item;
         FullView.Visibility = Visibility.Visible;
-        RenderFull();
+        // Zone pas encore mesurée (elle était masquée) : le rendu attend sa taille (FullView_SizeChanged).
+        if (FullView.ActualHeight > 0) RenderFull();
         FullView.DispatcherQueue.TryEnqueue(() => FullPrevButton.Focus(FocusState.Programmatic));
     }
 
@@ -354,7 +355,7 @@ public sealed partial class MainWindow
         var codes = _fullItem.Owner.Codes;
         if (!codes.Contains(_fullItem)) { CloseFull(); return; }
 
-        double maxW = Math.Max(100, Root.ActualWidth * 0.92), maxH = Math.Max(100, FullView.ActualHeight - 200);
+        double maxW = Math.Max(100, FullView.ActualWidth * 0.92), maxH = Math.Max(100, FullView.ActualHeight - 200);
         // Le plein écran ne reçoit jamais un code en erreur (OpenFull, StepFull) : il a toujours une matrice.
         FullImage.Source = CodeBitmaps.Fit(_fullItem.Matrix!, maxW, maxH, ViewModel.DpiScale);
         FullText.Text = FullImage.Source is null ? $"{_fullItem.Text}\n{Loc.TooWideFull}" : _fullItem.Text;
@@ -392,6 +393,12 @@ public sealed partial class MainWindow
     }
 
     private bool FullScreenOpen => FullView.Visibility == Visibility.Visible;
+
+    /// <summary>Ouverture du plein écran ou fenêtre redimensionnée : le code est recalculé pour la place réelle.</summary>
+    private void FullView_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        if (FullScreenOpen && e.NewSize.Height > 0) RenderFull();
+    }
 
     private void FullPrev_Click(object sender, RoutedEventArgs e) => StepFull(-1);
     private void FullNext_Click(object sender, RoutedEventArgs e) => StepFull(1);

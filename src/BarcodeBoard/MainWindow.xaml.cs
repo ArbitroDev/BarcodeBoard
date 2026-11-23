@@ -165,8 +165,8 @@ public sealed partial class MainWindow : Window
 
     private void OnAppWindowChanged(AppWindow sender, AppWindowChangedEventArgs args)
     {
+        // Le plein écran suit la taille de sa zone (FullView_SizeChanged), une fois la mise en page faite.
         if (args.DidPresenterChange || args.DidSizeChange) UpdateCaptionMetrics();
-        if (args.DidSizeChange && FullView.Visibility == Visibility.Visible) RenderFull();
     }
 
     /// <summary>
