@@ -44,7 +44,6 @@
     <PublishSingleFile>true</PublishSingleFile>
     <IncludeAllContentForSelfExtract>true</IncludeAllContentForSelfExtract>
     <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
-    <DebugType>none</DebugType>
   </PropertyGroup>
 
 </Project>
