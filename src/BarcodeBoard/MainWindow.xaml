@@ -406,7 +406,7 @@
                                                     </Grid>
                                                     <!-- Texte : un clic le copie. Masqué sans changer la taille de la carte quand le code est flouté. -->
                                                     <Button Style="{StaticResource SubtleButtonStyle}" Margin="0,6,0,0" Padding="6,2,6,3" HorizontalAlignment="Center"
-                                                            Click="CopyText_Click" ToolTipService.ToolTip="{x:Bind local:Loc.CopyTextTip}" controls:PointerCursor.Shape="Hand"
+                                                            Click="CopyText_Click" ToolTipService.ToolTip="{x:Bind local:Loc.CopyTextTip}"
                                                             Opacity="{x:Bind DetailsOpacity, Mode=OneWay}" IsHitTestVisible="{x:Bind NotBlurred, Mode=OneWay}">
                                                         <TextBlock Text="{x:Bind Text, Mode=OneWay}" FontFamily="{StaticResource Mono}" FontSize="12.5"
                                                                    TextWrapping="Wrap" TextAlignment="Center" MaxWidth="280"/>
@@ -462,7 +462,7 @@
             <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
                 <controls:PixelImage x:Name="FullImage" HorizontalAlignment="Center" HidesPointer="True"/>
                 <Button Style="{StaticResource SubtleButtonStyle}" Margin="0,14,0,0" HorizontalAlignment="Center" Click="CopyFullText_Click"
-                        ToolTipService.ToolTip="{x:Bind local:Loc.CopyTextTip}" controls:PointerCursor.Shape="Hand">
+                        ToolTipService.ToolTip="{x:Bind local:Loc.CopyTextTip}">
                     <TextBlock x:Name="FullText" FontFamily="{StaticResource Mono}" FontSize="18" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="900"/>
                 </Button>
             </StackPanel>
