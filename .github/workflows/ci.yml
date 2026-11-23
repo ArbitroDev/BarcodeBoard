@@ -26,3 +26,5 @@ jobs:
         run: dotnet test tests/BarcodeBoard.Core.Tests -c Release
       - name: Compilation de l'application
         run: dotnet build src/BarcodeBoard -c Release
+      - name: Compilation de l'application WinUI
+        run: dotnet build src/BarcodeBoard.WinUI -c Release
