@@ -93,6 +93,7 @@ public sealed partial class MainWindow : Window
         _toastTimer.Interval = TimeSpan.FromSeconds(2.4);
         _toastTimer.Tick += (_, _) => HideToast();
         Root.Loaded += OnLoaded;
+        AppWindow.Changed += (_, e) => { if (e.DidSizeChange || e.DidPresenterChange) UpdateTabStripPadding(); };
         AppWindow.Closing += OnClosing;
         Closed += OnClosed;
     }
@@ -107,6 +108,19 @@ public sealed partial class MainWindow : Window
     // ================= Démarrage, échelle, fenêtre =================
 
     private static string IconPath => Path.Combine(AppContext.BaseDirectory, "Assets", "BarcodeBoard.ico");
+
+    /// <summary>
+    /// Fenêtre agrandie : les onglets touchent le haut de l'écran, comme dans les navigateurs (le pointeur poussé
+    /// tout en haut tombe sur un onglet). Sinon, TabView garde sa marge haute (TabViewHeaderPadding), qui laisse
+    /// saisir la fenêtre au-dessus des onglets.
+    /// </summary>
+    private void UpdateTabStripPadding()
+    {
+        if (AppWindow.Presenter is OverlappedPresenter { State: OverlappedPresenterState.Maximized })
+            Tabs.Padding = new Thickness(0);
+        else
+            Tabs.ClearValue(Control.PaddingProperty);
+    }
 
     /// <summary>Debug : --no-mica garde le fond opaque (captures internes complètes, rien de l'écran ne s'y glisse).</summary>
     private static bool NoMicaRequested()
@@ -127,6 +141,7 @@ public sealed partial class MainWindow : Window
         // pour qu'on puisse toujours la saisir à côté des onglets.
         SetTitleBar(CustomDragRegion);
         CustomDragRegion.MinWidth = 188;
+        UpdateTabStripPadding();
         ViewModel.DpiScale = Root.XamlRoot.RasterizationScale;
         Root.XamlRoot.Changed += (_, _) =>
         {
