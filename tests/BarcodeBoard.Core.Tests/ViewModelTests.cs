@@ -275,7 +275,10 @@ public class SettingsTests
     }
 }
 
-/// <summary>Icône de la barre de titre : l'image dessinée pour la taille exacte, à chaque échelle.</summary>
+/// <summary>
+/// Icône de l'exe et des fenêtres : Windows prend dans le .ico l'image de la taille exacte de chaque échelle
+/// (16 px à 100 %, 20 px à 125 %…) ; dessinée pour cette taille, elle reste nette.
+/// </summary>
 public class IconTests
 {
     private static byte[] Ico()
@@ -288,18 +291,18 @@ public class IconTests
         throw new FileNotFoundException("BarcodeBoard.ico introuvable");
     }
 
-    private static int PngWidth(byte[] png) => System.Buffers.Binary.BinaryPrimitives.ReadInt32BigEndian(png.AsSpan(16));
+    /// <summary>Tailles des images du .ico (en-tête ICONDIR puis une entrée de 16 octets par image ; 0 = 256).</summary>
+    private static IEnumerable<int> FrameSizes(byte[] ico)
+    {
+        int count = System.Buffers.Binary.BinaryPrimitives.ReadUInt16LittleEndian(ico.AsSpan(4));
+        for (int i = 0; i < count; i++) yield return ico[6 + 16 * i] is 0 ? 256 : ico[6 + 16 * i];
+    }
 
     [Theory]
-    [InlineData(16, 16)]
-    [InlineData(20, 20)]
-    [InlineData(24, 24)]
-    [InlineData(32, 32)]
-    [InlineData(17, 20)]
-    [InlineData(300, 256)]
-    public void Picks_the_frame_drawn_for_the_size(int wanted, int expected) =>
-        Assert.Equal(expected, PngWidth(IconFrames.Png(Ico(), wanted)!));
-
-    [Fact]
-    public void Not_an_icon_gives_nothing() => Assert.Null(IconFrames.Png([1, 2, 3, 4, 5, 6, 7], 16));
+    [InlineData(16)]
+    [InlineData(20)]
+    [InlineData(24)]
+    [InlineData(32)]
+    [InlineData(256)]
+    public void Has_a_frame_drawn_for_the_size(int size) => Assert.Contains(size, FrameSizes(Ico()));
 }
