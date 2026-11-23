@@ -26,7 +26,28 @@ public partial class App : Application
     {
         e.Handled = true;
         AppSettings.LogError(e.Exception);
+        var message = Loc.UnexpectedError(e.Exception.Message);
         if (AppWindows.LastActive is { } window && window.Content is FrameworkElement root && root.XamlRoot is not null)
-            _ = Dialogs.Show(root, Loc.AppName, Loc.UnexpectedError(e.Exception.Message));
+        {
+            ShowError(root, message);
+            return;
+        }
+        // Aucune fenêtre prête (erreur au démarrage…) : message de Windows, qui n'a besoin d'aucune fenêtre.
+        ShowNativeError(message);
+        // Sans aucune fenêtre, rien à préserver : l'application s'arrête au lieu de rester ouverte, invisible.
+        if (AppWindows.All.Count == 0) Exit();
     }
+
+    private static async void ShowError(FrameworkElement root, string message)
+    {
+        try { await Dialogs.Show(root, Loc.AppName, message); }
+        catch (Exception ex)
+        {
+            AppSettings.LogError(ex);
+            ShowNativeError(message);
+        }
+    }
+
+    private static void ShowNativeError(string message) =>
+        Native.MessageBox(IntPtr.Zero, message, Loc.AppName, Native.MB_OK | Native.MB_ICONERROR);
 }
