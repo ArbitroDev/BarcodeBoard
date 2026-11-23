@@ -67,7 +67,9 @@ public class ThemeResourceTests
                 fromCode.Add(m.Groups[1].Value);
 
         string[] systemSuffixes = ["Brush", "Style", "FontFamily", "FontSize", "Thickness", "CornerRadius", "Margin", "Padding"];
-        var missing = requested.Where(k => !defined.Contains(k) && !systemSuffixes.Any(k.EndsWith)).ToList();
+        // Ressources de contrôles WinUI reprises telles quelles (la barre d'outils a le fond de l'onglet actif).
+        string[] winUiKeys = ["TabViewItemHeaderBackgroundSelected"];
+        var missing = requested.Where(k => !defined.Contains(k) && !systemSuffixes.Any(k.EndsWith) && !winUiKeys.Contains(k)).ToList();
         Assert.Empty(missing);
         Assert.Empty(fromCode.Except(Keys(Palette("Light"))));
     }

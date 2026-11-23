@@ -7,92 +7,25 @@
     <Grid x:Name="Root" PreviewKeyDown="Root_PreviewKeyDown" CharacterReceived="Root_CharacterReceived">
         <Grid.RowDefinitions>
             <!-- Barre de titre : les onglets y sont, comme dans l'Explorateur -->
-            <RowDefinition x:Name="TitleRow" Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
         <!-- ===================== Barre de titre et onglets ===================== -->
-        <!-- La bande d'onglets seulement : le contenu de l'onglet actif est plus bas, un seul pour la fenêtre. -->
-        <TabView x:Name="Tabs" VerticalAlignment="Bottom" TabWidthMode="Equal"
-                 IsAddTabButtonVisible="True" CanReorderTabs="True" CanTearOutTabs="True"
+        <!-- Intégration de l'exemple officiel (galerie WinUI, TabView et arrachage) : la bande d'onglets dans la
+             barre de titre, un en-tête et un pied vides. Le pied sert de zone de déplacement de la fenêtre
+             (SetTitleBar) ; Windows y dessine ses boutons Réduire / Agrandir / Fermer. Le contenu de l'onglet
+             actif est plus bas, un seul pour la fenêtre : TabView ne montre que sa bande. -->
+        <TabView x:Name="Tabs" VerticalAlignment="Top" IsAddTabButtonVisible="True" CanTearOutTabs="True"
                  AddTabButtonClick="Tabs_AddTabButtonClick" SelectionChanged="Tabs_SelectionChanged"
                  TabCloseRequested="Tabs_TabCloseRequested" TabItemsChanged="Tabs_TabItemsChanged"
                  TabTearOutWindowRequested="Tabs_TabTearOutWindowRequested" TabTearOutRequested="Tabs_TabTearOutRequested"
                  ExternalTornOutTabsDropping="Tabs_ExternalTornOutTabsDropping" ExternalTornOutTabsDropped="Tabs_ExternalTornOutTabsDropped">
             <TabView.TabStripHeader>
-                <Image x:Name="TitleIcon" Width="16" Height="16" Margin="14,0,8,0" VerticalAlignment="Center"/>
+                <Grid x:Name="ShellTitleBarInset" Background="Transparent"/>
             </TabView.TabStripHeader>
             <TabView.TabStripFooter>
-                <Grid x:Name="TitleFooter">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                        <!-- Place des boutons Réduire / Agrandir / Fermer, dessinés par Windows -->
-                        <ColumnDefinition x:Name="CaptionColumn" Width="138"/>
-                    </Grid.ColumnDefinitions>
-                    <!-- Liste de tous les onglets, quand ils ne tiennent plus dans la bande -->
-                    <Button x:Name="TabListButton" Style="{StaticResource SubtleButtonStyle}" Visibility="Collapsed" Padding="8,6"
-                            VerticalAlignment="Center" ToolTipService.ToolTip="{x:Bind local:Loc.AllTabs}">
-                        <FontIcon Glyph="&#xE70D;" FontSize="12"/>
-                        <Button.Flyout>
-                            <MenuFlyout x:Name="TabListMenu" Placement="Bottom" Opening="TabListMenu_Opening"/>
-                        </Button.Flyout>
-                    </Button>
-                    <!-- Zone qui déplace la fenêtre (double-clic : agrandir) -->
-                    <Grid x:Name="DragRegion" Grid.Column="1" Background="Transparent" MinWidth="48"/>
-                    <!-- Paramètres, juste avant les boutons de la fenêtre, comme le Bloc-notes ou Paint -->
-                    <Button x:Name="SettingsButton" Grid.Column="2" Style="{StaticResource SubtleButtonStyle}" VerticalAlignment="Top"
-                            Width="46" CornerRadius="0" ToolTipService.ToolTip="{x:Bind local:Loc.SettingsTip}">
-                        <FontIcon Glyph="&#xE713;" FontSize="15"/>
-                        <Button.Flyout>
-                            <Flyout x:Name="SettingsFlyout" Placement="BottomEdgeAlignedRight" Opening="SettingsFlyout_Opening">
-                                <StackPanel Width="400">
-                                    <TextBlock Text="{x:Bind local:Loc.Settings}" Style="{StaticResource BodyStrongTextBlockStyle}"/>
-                                    <TextBlock Text="{x:Bind local:Loc.AppTheme}" Style="{StaticResource MutedText}" Margin="0,4,0,10"/>
-                                    <!-- Les vignettes montrent chaque thème tel qu'il est, quel que soit le thème actif :
-                                         leurs couleurs fixes sont voulues et ne passent pas par les palettes. -->
-                                    <GridView x:Name="ThemeTiles" SelectionMode="Single" SelectionChanged="ThemeTiles_SelectionChanged">
-                                        <GridViewItem>
-                                            <StackPanel Width="112" Margin="4">
-                                                <Grid Height="60" CornerRadius="5">
-                                                    <Grid.ColumnDefinitions>
-                                                        <ColumnDefinition/>
-                                                        <ColumnDefinition/>
-                                                    </Grid.ColumnDefinitions>
-                                                    <Border Background="#F3F3F3"/>
-                                                    <Border Grid.Column="1" Background="#202020"/>
-                                                    <Rectangle Width="30" Height="6" RadiusX="3" RadiusY="3" Fill="#005FB8" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="8,8,0,0"/>
-                                                    <Rectangle Grid.Column="1" Fill="#2B2B2B" RadiusX="4" RadiusY="4" Margin="0,20,8,8"/>
-                                                    <Rectangle Fill="White" RadiusX="4" RadiusY="4" Margin="8,20,0,8"/>
-                                                </Grid>
-                                                <TextBlock Text="{x:Bind local:Loc.ThemeSystem}" HorizontalAlignment="Center" Margin="0,6,0,0" FontSize="12.5"/>
-                                            </StackPanel>
-                                        </GridViewItem>
-                                        <GridViewItem>
-                                            <StackPanel Width="112" Margin="4">
-                                                <Grid Height="60" CornerRadius="5" Background="#F3F3F3">
-                                                    <Rectangle Width="30" Height="6" RadiusX="3" RadiusY="3" Fill="#005FB8" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="8,8,0,0"/>
-                                                    <Rectangle Fill="White" RadiusX="4" RadiusY="4" Margin="8,20,8,8"/>
-                                                </Grid>
-                                                <TextBlock Text="{x:Bind local:Loc.ThemeLight}" HorizontalAlignment="Center" Margin="0,6,0,0" FontSize="12.5"/>
-                                            </StackPanel>
-                                        </GridViewItem>
-                                        <GridViewItem>
-                                            <StackPanel Width="112" Margin="4">
-                                                <Grid Height="60" CornerRadius="5" Background="#202020">
-                                                    <Rectangle Width="30" Height="6" RadiusX="3" RadiusY="3" Fill="#4CC2FF" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="8,8,0,0"/>
-                                                    <Rectangle Fill="#2B2B2B" RadiusX="4" RadiusY="4" Margin="8,20,8,8"/>
-                                                </Grid>
-                                                <TextBlock Text="{x:Bind local:Loc.ThemeDark}" HorizontalAlignment="Center" Margin="0,6,0,0" FontSize="12.5"/>
-                                            </StackPanel>
-                                        </GridViewItem>
-                                    </GridView>
-                                </StackPanel>
-                            </Flyout>
-                        </Button.Flyout>
-                    </Button>
-                </Grid>
+                <Grid x:Name="CustomDragRegion" Background="Transparent"/>
             </TabView.TabStripFooter>
         </TabView>
 
@@ -104,7 +37,7 @@
             </Grid.RowDefinitions>
 
             <!-- Barre d'outils : même fond que l'onglet actif, dans lequel elle se fond -->
-            <Border x:Name="Toolbar" BorderBrush="{ThemeResource Line}" BorderThickness="0,0,0,1" Padding="10,6">
+            <Border x:Name="Toolbar" Background="{ThemeResource TabViewItemHeaderBackgroundSelected}" BorderBrush="{ThemeResource Line}" BorderThickness="0,0,0,1" Padding="10,6">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto"/>
@@ -181,6 +114,57 @@
                                 <TextBlock Text="{x:Bind local:Loc.ScanMode}"/>
                             </StackPanel>
                         </ToggleButton>
+                        <Rectangle Width="1" Height="20" Fill="{ThemeResource Line}"/>
+                    <!-- Paramètres (thème) -->
+                    <Button x:Name="SettingsButton" Style="{StaticResource SubtleButtonStyle}" ToolTipService.ToolTip="{x:Bind local:Loc.SettingsTip}">
+                        <FontIcon Glyph="&#xE713;" FontSize="15"/>
+                        <Button.Flyout>
+                            <Flyout x:Name="SettingsFlyout" Placement="BottomEdgeAlignedRight" Opening="SettingsFlyout_Opening">
+                                <StackPanel Width="400">
+                                    <TextBlock Text="{x:Bind local:Loc.Settings}" Style="{StaticResource BodyStrongTextBlockStyle}"/>
+                                    <TextBlock Text="{x:Bind local:Loc.AppTheme}" Style="{StaticResource MutedText}" Margin="0,4,0,10"/>
+                                    <!-- Les vignettes montrent chaque thème tel qu'il est, quel que soit le thème actif :
+                                         leurs couleurs fixes sont voulues et ne passent pas par les palettes. -->
+                                    <GridView x:Name="ThemeTiles" SelectionMode="Single" SelectionChanged="ThemeTiles_SelectionChanged">
+                                        <GridViewItem>
+                                            <StackPanel Width="112" Margin="4">
+                                                <Grid Height="60" CornerRadius="5">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition/>
+                                                        <ColumnDefinition/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <Border Background="#F3F3F3"/>
+                                                    <Border Grid.Column="1" Background="#202020"/>
+                                                    <Rectangle Width="30" Height="6" RadiusX="3" RadiusY="3" Fill="#005FB8" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="8,8,0,0"/>
+                                                    <Rectangle Grid.Column="1" Fill="#2B2B2B" RadiusX="4" RadiusY="4" Margin="0,20,8,8"/>
+                                                    <Rectangle Fill="White" RadiusX="4" RadiusY="4" Margin="8,20,0,8"/>
+                                                </Grid>
+                                                <TextBlock Text="{x:Bind local:Loc.ThemeSystem}" HorizontalAlignment="Center" Margin="0,6,0,0" FontSize="12.5"/>
+                                            </StackPanel>
+                                        </GridViewItem>
+                                        <GridViewItem>
+                                            <StackPanel Width="112" Margin="4">
+                                                <Grid Height="60" CornerRadius="5" Background="#F3F3F3">
+                                                    <Rectangle Width="30" Height="6" RadiusX="3" RadiusY="3" Fill="#005FB8" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="8,8,0,0"/>
+                                                    <Rectangle Fill="White" RadiusX="4" RadiusY="4" Margin="8,20,8,8"/>
+                                                </Grid>
+                                                <TextBlock Text="{x:Bind local:Loc.ThemeLight}" HorizontalAlignment="Center" Margin="0,6,0,0" FontSize="12.5"/>
+                                            </StackPanel>
+                                        </GridViewItem>
+                                        <GridViewItem>
+                                            <StackPanel Width="112" Margin="4">
+                                                <Grid Height="60" CornerRadius="5" Background="#202020">
+                                                    <Rectangle Width="30" Height="6" RadiusX="3" RadiusY="3" Fill="#4CC2FF" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="8,8,0,0"/>
+                                                    <Rectangle Fill="#2B2B2B" RadiusX="4" RadiusY="4" Margin="8,20,8,8"/>
+                                                </Grid>
+                                                <TextBlock Text="{x:Bind local:Loc.ThemeDark}" HorizontalAlignment="Center" Margin="0,6,0,0" FontSize="12.5"/>
+                                            </StackPanel>
+                                        </GridViewItem>
+                                    </GridView>
+                                </StackPanel>
+                            </Flyout>
+                        </Button.Flyout>
+                    </Button>
                     </StackPanel>
                 </Grid>
             </Border>

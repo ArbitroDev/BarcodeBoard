@@ -1,6 +1,5 @@
 using System.Collections.Specialized;
 using System.ComponentModel;
-using BarcodeBoard.Controls;
 using Microsoft.UI;
 using Microsoft.UI.Composition.SystemBackdrops;
 using Microsoft.UI.Windowing;
@@ -8,7 +7,6 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Media;
-using Microsoft.UI.Xaml.Media.Imaging;
 using Windows.Foundation.Collections;
 using Windows.Graphics;
 
@@ -29,6 +27,9 @@ public sealed partial class MainWindow : Window
     /// </summary>
     private static readonly Dictionary<TabViewModel, TabViewItem> TabItems = [];
 
+    /// <summary>Un élément d'onglet passe d'un TabView à l'autre : la synchronisation avec le modèle attend la fin.</summary>
+    private static bool _movingTab;
+
     private readonly AppSettings _settings = AppSettings.Current;
     private readonly IReadOnlyList<string> _startupFiles;
     private readonly bool _isFirst, _mica;
@@ -37,7 +38,8 @@ public sealed partial class MainWindow : Window
     /// <summary>Onglets dont la fermeture est en cours (question affichée) : Ctrl+W répété ne les ferme pas deux fois.</summary>
     private readonly HashSet<TabViewModel> _closingTabs = [];
     private TabViewModel? _titleTab;
-    private ScrollViewer? _tabScroller;
+    /// <summary>Fenêtre créée pour l'arrachage en cours (TabTearOutWindowRequested), en attente de son onglet.</summary>
+    private MainWindow? _tearOutWindow;
 
     public MainViewModel ViewModel { get; } = new();
 
@@ -58,16 +60,11 @@ public sealed partial class MainWindow : Window
 
         // Onglets dans la barre de titre ; Windows garde ses boutons Réduire / Agrandir / Fermer.
         ExtendsContentIntoTitleBar = true;
-        SetTitleBar(DragRegion);
-        AppWindow.TitleBar.PreferredHeightOption = TitleBarHeightOption.Tall;
-        AppWindow.TitleBar.ButtonBackgroundColor = Colors.Transparent;
-        AppWindow.TitleBar.ButtonInactiveBackgroundColor = Colors.Transparent;
         AppWindow.SetIcon(IconPath);
 
         // Mica Alt (Windows 11), le matériau des applications à onglets ; Windows 10 garde un fond opaque.
         _mica = !NoMicaRequested() && MicaController.IsSupported();
         if (_mica) SystemBackdrop = new MicaBackdrop { Kind = MicaKind.BaseAlt };
-        PrepareTabColors();
 
         ViewModel.CodeSize = _settings.CodeSize;
         ViewModel.SideOpen = _settings.SideOpen;
@@ -92,7 +89,6 @@ public sealed partial class MainWindow : Window
         _toastTimer.Interval = TimeSpan.FromSeconds(2.4);
         _toastTimer.Tick += (_, _) => HideToast();
         Root.Loaded += OnLoaded;
-        AppWindow.Changed += OnAppWindowChanged;
         AppWindow.Closing += OnClosing;
         Closed += OnClosed;
     }
@@ -123,70 +119,25 @@ public sealed partial class MainWindow : Window
 
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
+        // Comme l'exemple officiel : le pied de la bande d'onglets déplace la fenêtre, et laisse de la place
+        // pour qu'on puisse toujours la saisir à côté des onglets.
+        SetTitleBar(CustomDragRegion);
+        CustomDragRegion.MinWidth = 188;
         ViewModel.DpiScale = Root.XamlRoot.RasterizationScale;
         Root.XamlRoot.Changed += (_, _) =>
         {
             double scale = Root.XamlRoot?.RasterizationScale ?? 1;
             if (scale == ViewModel.DpiScale) return;
-            // Fenêtre déplacée vers un écran d'une autre échelle : codes et icône redessinés au pixel près.
+            // Fenêtre déplacée vers un écran d'une autre échelle : codes redessinés au pixel près.
             ViewModel.DpiScale = scale;
-            UpdateTitleIcon();
-            UpdateCaptionMetrics();
             if (FullView.Visibility == Visibility.Visible) RenderFull();
         };
-        UpdateTitleIcon();
-        UpdateCaptionMetrics();
         ApplySideWidth();
-        HookTabScroller();
         foreach (var file in _startupFiles) OpenPath(file);
         FocusComposer();
 #if DEBUG
         if (_isFirst) DebugScenario.Run(this, ViewModel);
 #endif
-    }
-
-    /// <summary>Icône de la barre de titre : l'image du .ico dessinée pour 16 px à l'échelle de l'écran, sans redimensionnement.</summary>
-    private async void UpdateTitleIcon()
-    {
-        try
-        {
-            if (IconFrames.Png(await File.ReadAllBytesAsync(IconPath), (int)Math.Round(16 * ViewModel.DpiScale)) is not { } png) return;
-            var image = new BitmapImage();
-            using var stream = new Windows.Storage.Streams.InMemoryRandomAccessStream();
-            using (var writer = new Windows.Storage.Streams.DataWriter(stream))
-            {
-                writer.WriteBytes(png);
-                await writer.StoreAsync();
-                writer.DetachStream();
-            }
-            stream.Seek(0);
-            await image.SetSourceAsync(stream);
-            TitleIcon.Source = image;
-        }
-        catch (IOException) { }
-    }
-
-    private void OnAppWindowChanged(AppWindow sender, AppWindowChangedEventArgs args)
-    {
-        // Le plein écran suit la taille de sa zone (FullView_SizeChanged), une fois la mise en page faite.
-        if (args.DidPresenterChange || args.DidSizeChange) UpdateCaptionMetrics();
-    }
-
-    /// <summary>
-    /// Boutons système dessinés par Windows : leur place est réservée à droite des onglets, et la roue des paramètres
-    /// prend leur hauteur. Agrandie, la barre de titre se réduit : les onglets touchent le haut de l'écran.
-    /// </summary>
-    private void UpdateCaptionMetrics()
-    {
-        if (Root.XamlRoot is null) return;
-        bool maximized = AppWindow.Presenter is OverlappedPresenter { State: OverlappedPresenterState.Maximized };
-        var option = maximized ? TitleBarHeightOption.Standard : TitleBarHeightOption.Tall;
-        if (AppWindow.TitleBar.PreferredHeightOption != option) AppWindow.TitleBar.PreferredHeightOption = option;
-        double scale = Root.XamlRoot.RasterizationScale;
-        double captionHeight = AppWindow.TitleBar.Height / scale;
-        CaptionColumn.Width = new GridLength(Math.Max(0, AppWindow.TitleBar.RightInset / scale));
-        SettingsButton.Height = captionHeight;
-        TitleRow.Height = maximized ? GridLength.Auto : new GridLength(Math.Max(captionHeight, 40));
     }
 
     // ================= Thème et couches =================
@@ -204,24 +155,9 @@ public sealed partial class MainWindow : Window
     {
         var theme = Root.ActualTheme;
         string suffix = _mica ? "Mica" : "";
-        Toolbar.Background = Theme.Brush("ChromeLayer" + suffix, theme);
         SideLayer.Background = Theme.Brush("SideLayer" + suffix, theme);
         ContentLayer.Background = Theme.Brush("ContentLayer" + suffix, theme);
         Root.Background = _mica ? new SolidColorBrush(Colors.Transparent) : Theme.Brush("WindowBg", theme);
-    }
-
-    /// <summary>L'onglet actif a la couleur de la barre d'outils, dans laquelle il se fond (comme l'Explorateur).</summary>
-    private void PrepareTabColors()
-    {
-        foreach (var (key, theme) in new[] { ("Light", ElementTheme.Light), ("Dark", ElementTheme.Dark) })
-        {
-            var colors = new ResourceDictionary
-            {
-                ["TabViewItemHeaderBackgroundSelected"] = Theme.Brush(_mica ? "ChromeLayerMica" : "ChromeLayer", theme),
-                ["TabViewBackground"] = new SolidColorBrush(Colors.Transparent),
-            };
-            Tabs.Resources.ThemeDictionaries[key] = colors;
-        }
     }
 
     internal void SetTheme(ThemeChoice choice)
@@ -378,8 +314,14 @@ public sealed partial class MainWindow : Window
     private static TabViewItem ItemFor(TabViewModel tab)
     {
         if (TabItems.TryGetValue(tab, out var item)) return item;
-        var header = new TabHeader(tab);
-        item = new TabViewItem { Header = header, Tag = tab, IsClosable = true };
+        item = new TabViewItem { Header = HeaderText(tab), Tag = tab, IsClosable = true };
+        ToolTipService.SetToolTip(item, tab.ToolTip);
+        var created = item;
+        tab.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName is nameof(TabViewModel.Name) or nameof(TabViewModel.IsDirty)) created.Header = HeaderText(tab);
+            else if (e.PropertyName == nameof(TabViewModel.ToolTip)) ToolTipService.SetToolTip(created, tab.ToolTip);
+        };
         // Menu neuf à chaque ouverture, dans la fenêtre où l'onglet se trouve alors : un menu déjà ouvert dans une
         // fenêtre ne s'ouvre pas forcément dans une autre, et l'onglet passe d'une fenêtre à l'autre.
         item.ContextRequested += (sender, e) =>
@@ -387,7 +329,7 @@ public sealed partial class MainWindow : Window
             if (AppWindows.For(tab.Main) is not { } window) return;
             var target = (TabViewItem)sender;
             var menu = new MenuFlyout();
-            window.FillTabMenu(menu, tab, header);
+            window.FillTabMenu(menu, tab);
             if (e.TryGetPosition(target, out var point)) menu.ShowAt(target, new FlyoutShowOptions { Position = point });
             else menu.ShowAt(target);
             e.Handled = true;
@@ -396,12 +338,15 @@ public sealed partial class MainWindow : Window
         return item;
     }
 
+    /// <summary>Nom de l'onglet, suivi d'un point s'il a des modifications non enregistrées.</summary>
+    private static string HeaderText(TabViewModel tab) => tab.IsDirty ? $"{tab.Name} •" : tab.Name;
+
     private static TabViewModel? TabOf(object? item) => (item as TabViewItem)?.Tag as TabViewModel;
 
     /// <summary>Les onglets du modèle changent (nouvel onglet, fermeture, onglet venu d'ailleurs) : TabView suit.</summary>
     private void OnTabsChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
-        if (_syncingTabs) return;
+        if (_syncingTabs || _movingTab) return;
         _syncingTabs = true;
         try
         {
@@ -436,7 +381,7 @@ public sealed partial class MainWindow : Window
     private void Tabs_TabItemsChanged(TabView sender, IVectorChangedEventArgs args)
     {
         // Pendant un glisser, TabView retire puis réinsère l'onglet : on attend que la liste soit complète.
-        if (_syncingTabs || Tabs.TabItems.Count != ViewModel.Tabs.Count) return;
+        if (_syncingTabs || _movingTab || Tabs.TabItems.Count != ViewModel.Tabs.Count) return;
         _syncingTabs = true;
         try
         {
@@ -455,7 +400,7 @@ public sealed partial class MainWindow : Window
 
     private void Tabs_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (_syncingTabs) return;
+        if (_syncingTabs || _movingTab) return;
         if (TabOf(Tabs.SelectedItem) is { } tab && tab != ViewModel.SelectedTab)
         {
             CommitPendingRenames(); // cliquer un autre onglet ne retire pas forcément le focus : on valide ici
@@ -566,11 +511,11 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>Menu d'un onglet : renommer, nouvelle fenêtre, autre fenêtre, fermer.</summary>
-    private void FillTabMenu(MenuFlyout menu, TabViewModel tab, TabHeader header)
+    private void FillTabMenu(MenuFlyout menu, TabViewModel tab)
     {
         menu.Items.Clear();
         var rename = new MenuFlyoutItem { Text = Loc.Rename, IsEnabled = !ViewModel.ScanMode };
-        rename.Click += (_, _) => header.BeginRename();
+        rename.Click += (_, _) => Run(RenameTab(tab));
         menu.Items.Add(rename);
         menu.Items.Add(new MenuFlyoutSeparator());
 
@@ -603,78 +548,120 @@ public sealed partial class MainWindow : Window
         menu.Items.Add(close);
     }
 
-    /// <summary>
-    /// Passe un onglet d'une fenêtre à une autre, avec son élément d'onglet (le même objet).
-    /// La fenêtre d'origine vidée se ferme, sauf pendant un arrachage : TabView la masque puis la ferme lui-même
-    /// en fin de geste, et peut encore y remettre l'onglet si l'utilisateur l'arrache à nouveau.
-    /// </summary>
+    /// <summary>Renommer (menu de l'onglet), jamais en mode scan : Entrée et Échap y sont réservés à la douchette.</summary>
+    private async Task RenameTab(TabViewModel tab)
+    {
+        if (ViewModel.ScanMode) return;
+        if (await Dialogs.AskText(Root, Loc.Rename, tab.Name) is not { } name) return;
+        tab.BeginRename();
+        tab.RenameText = name;
+        tab.CommitRename();
+    }
+
+    /// <summary>Passe un onglet dans une autre fenêtre (menu de l'onglet) ; la fenêtre d'origine vidée se ferme.</summary>
     private static void MoveTab(MainWindow from, TabViewModel tab, MainWindow to, int index, bool closeEmptySource)
     {
-        from.ViewModel.Release(tab);
-        to.ViewModel.Adopt(tab, index);
+        MoveTabItem(ItemFor(tab), from, to, index);
         if (closeEmptySource)
         {
             to.BringToFront();
-            if (from.ViewModel.Tabs.Count == 0) from.DispatcherQueue.TryEnqueue(from.CloseWithoutPrompts);
+            CloseIfEmpty(from);
         }
     }
 
-    // ---- Arrachage et fusion (TabView, Windows App SDK 1.6 et plus) ----
+    /// <summary>
+    /// Déplace un élément d'onglet d'un TabView à l'autre, comme l'exemple officiel (retiré de l'un, inséré dans
+    /// l'autre : le même objet, que TabView suit pendant un glisser), puis met les deux modèles à jour.
+    /// </summary>
+    private static void MoveTabItem(TabViewItem item, MainWindow? from, MainWindow to, int index)
+    {
+        if (TabOf(item) is not { } tab) return;
+        _movingTab = true;
+        try
+        {
+            (from?.Tabs ?? ParentTabView(item))?.TabItems.Remove(item);
+            index = Math.Clamp(index, 0, to.Tabs.TabItems.Count);
+            to.Tabs.TabItems.Insert(index, item);
+            from?.ViewModel.Release(tab);
+            to.ViewModel.Adopt(tab, index);
+        }
+        finally
+        {
+            _movingTab = false;
+        }
+        from?.SyncSelectedTab();
+        to.SyncSelectedTab();
+    }
 
-    /// <summary>Un onglet quitte la bande : TabView demande une fenêtre neuve, qu'il affichera et déplacera.</summary>
-    private void Tabs_TabTearOutWindowRequested(TabView sender, TabViewTabTearOutWindowRequestedEventArgs args)
+    private static void CloseIfEmpty(MainWindow window)
+    {
+        if (!window.ViewModel.HasTabs) window.DispatcherQueue.TryEnqueue(window.CloseWithoutPrompts);
+    }
+
+    /// <summary>TabView qui contient un élément d'onglet, en remontant l'arbre visuel (comme l'exemple officiel).</summary>
+    private static TabView? ParentTabView(DependencyObject element)
+    {
+        for (var current = element; current is not null; current = VisualTreeHelper.GetParent(current))
+            if (current is TabView tabView) return tabView;
+        return null;
+    }
+
+    // ---- Arrachage et fusion : l'exemple officiel (galerie WinUI, TabViewWindowingSamplePage) ----
+
+    /// <summary>Un onglet quitte la bande : TabView demande une fenêtre neuve, qu'il placera et affichera.</summary>
+    private void Tabs_TabTearOutWindowRequested(TabView sender, TabViewTabTearOutWindowRequestedEventArgs args) => Guard(() =>
     {
         CommitPendingRenames();
-        var window = new MainWindow(tearOut: true);
-        args.NewWindowId = window.AppWindow.Id;
-    }
+        _tearOutWindow = new MainWindow(tearOut: true);
+        args.NewWindowId = _tearOutWindow.AppWindow.Id;
+    });
 
-    /// <summary>
-    /// L'onglet passe dans la fenêtre neuve. La fenêtre est retrouvée par son identifiant : l'événement peut venir
-    /// d'une autre fenêtre que celle d'origine (onglet fusionné puis arraché à nouveau dans le même geste).
-    /// </summary>
-    private void Tabs_TabTearOutRequested(TabView sender, TabViewTabTearOutRequestedEventArgs args)
+    /// <summary>La fenêtre neuve est prête : l'onglet y passe.</summary>
+    private void Tabs_TabTearOutRequested(TabView sender, TabViewTabTearOutRequestedEventArgs args) => Guard(() =>
     {
-        if (AppWindows.For(args.NewWindowId) is not { } target) return;
-        foreach (var item in args.Items)
-            if (TabOf(item) is { } tab && AppWindows.For(tab.Main) is { } source && source != target)
-                MoveTab(source, tab, target, target.ViewModel.Tabs.Count, closeEmptySource: false);
-    }
+        // Fenêtre demandée par cette fenêtre ; sinon (onglet fusionné puis arraché à nouveau dans le même geste)
+        // celle que TabView désigne.
+        var target = _tearOutWindow ?? AppWindows.For(args.NewWindowId);
+        _tearOutWindow = null;
+        if (target is null) return;
+        foreach (var item in args.Tabs.OfType<TabViewItem>())
+        {
+            var source = TabOf(item) is { } tab ? AppWindows.For(tab.Main) : null;
+            MoveTabItem(item, source, target, target.Tabs.TabItems.Count);
+        }
+        CloseIfEmpty(this);
+    });
 
     private void Tabs_ExternalTornOutTabsDropping(TabView sender, TabViewExternalTornOutTabsDroppingEventArgs args) =>
         args.AllowDrop = true;
 
-    /// <summary>Onglet arraché amené sur la bande de cette fenêtre : il y entre à l'endroit indiqué.</summary>
-    private void Tabs_ExternalTornOutTabsDropped(TabView sender, TabViewExternalTornOutTabsDroppedEventArgs args)
+    /// <summary>Onglet arraché amené sur la bande de cette fenêtre : il y entre ; sa fenêtre vidée se ferme.</summary>
+    private void Tabs_ExternalTornOutTabsDropped(TabView sender, TabViewExternalTornOutTabsDroppedEventArgs args) => Guard(() =>
     {
-        int index = args.DropIndex;
-        foreach (var item in args.Items)
-            if (TabOf(item) is { } tab && AppWindows.For(tab.Main) is { } source && source != this)
-                MoveTab(source, tab, this, index++, closeEmptySource: false);
-    }
-
-    // ---- Liste de tous les onglets ----
-
-    /// <summary>Le bouton « Tous les onglets » n'apparaît que si les onglets ne tiennent plus dans la bande.</summary>
-    private void HookTabScroller()
-    {
-        _tabScroller = FindDescendant<ScrollViewer>(Tabs);
-        if (_tabScroller is null) return;
-        void Sync() => TabListButton.Visibility = _tabScroller.ScrollableWidth > 0.5 ? Visibility.Visible : Visibility.Collapsed;
-        _tabScroller.RegisterPropertyChangedCallback(ScrollViewer.ScrollableWidthProperty, (_, _) => Sync());
-        Sync();
-    }
-
-    private void TabListMenu_Opening(object? sender, object e)
-    {
-        TabListMenu.Items.Clear();
-        foreach (var tab in ViewModel.Tabs)
+        int position = 0;
+        foreach (var item in args.Tabs.OfType<TabViewItem>())
         {
-            var item = new ToggleMenuFlyoutItem { Text = tab.Name, IsChecked = tab == Tab };
-            item.Click += (_, _) => ViewModel.SelectedTab = tab;
-            TabListMenu.Items.Add(item);
+            var source = TabOf(item) is { } tab ? AppWindows.For(tab.Main) : null;
+            MoveTabItem(item, source, this, args.DropIndex + position++);
+            if (source is not null && source != this) CloseIfEmpty(source);
+        }
+    });
+
+    /// <summary>
+    /// Une erreur pendant un glisser d'onglet ne doit pas passer inaperçue : elle est journalisée et signalée
+    /// une fois le geste fini.
+    /// </summary>
+    private void Guard(Action action)
+    {
+        try { action(); }
+        catch (Exception ex)
+        {
+            AppSettings.LogError(ex);
+            DispatcherQueue.TryEnqueue(() => Run(Dialogs.Show(Root, Loc.AppName, Loc.UnexpectedError(ex.Message))));
         }
     }
+
+    // ---- Arrachage et fusion (TabView, Windows App SDK 1.6 et plus) ----
 
     // ================= Outils =================
 

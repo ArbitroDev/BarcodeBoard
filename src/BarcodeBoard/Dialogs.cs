@@ -38,6 +38,23 @@ internal static class Dialogs
         };
     }
 
+    /// <summary>Demande un texte (nom d'un onglet…) ; null si l'utilisateur annule.</summary>
+    public static async Task<string?> AskText(FrameworkElement root, string title, string text)
+    {
+        var box = new TextBox { Text = text, MinWidth = 320 };
+        var dialog = Create(root, title, "");
+        dialog.Content = box;
+        dialog.PrimaryButtonText = Loc.Ok;
+        dialog.CloseButtonText = Loc.Cancel;
+        dialog.DefaultButton = ContentDialogButton.Primary;
+        dialog.Opened += (_, _) =>
+        {
+            box.Focus(FocusState.Programmatic);
+            box.SelectAll();
+        };
+        return await ShowInTurn(dialog) == ContentDialogResult.Primary ? box.Text : null;
+    }
+
     /// <summary>Message d'erreur avec un seul bouton.</summary>
     public static async Task Show(FrameworkElement root, string title, string message)
     {
