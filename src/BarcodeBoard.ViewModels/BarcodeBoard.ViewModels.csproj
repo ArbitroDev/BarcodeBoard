@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Logique de l'application sans interface : modèles de vue, textes, réglages, clavier. Testée sur toute plateforme. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>BarcodeBoard</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\BarcodeBoard.Core\BarcodeBoard.Core.csproj" />
+  </ItemGroup>
+
+</Project>

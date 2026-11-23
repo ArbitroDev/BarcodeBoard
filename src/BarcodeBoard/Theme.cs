@@ -1,81 +1,45 @@
-using System.Windows;
-using Microsoft.Win32;
+using Microsoft.UI.Windowing;
+using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Media;
 
 namespace BarcodeBoard;
 
-public enum ThemeChoice { System, Light, Dark }
-
 /// <summary>
-/// Thème clair ou sombre. Par défaut on suit Windows (Paramètres &gt; Personnalisation &gt; Couleurs),
-/// y compris quand l'utilisateur le change pendant que l'application est ouverte.
+/// Thème clair ou sombre de toutes les fenêtres. « Comme Windows » laisse chaque fenêtre suivre le mode des
+/// applications de Windows (Paramètres &gt; Personnalisation &gt; Couleurs), y compris quand il change.
 /// </summary>
 internal static class Theme
 {
-    private static bool _listening;
-
     public static ThemeChoice Choice { get; private set; } = ThemeChoice.System;
-    public static bool IsDark { get; private set; }
 
-    /// <summary>Déclenché après chaque changement effectif de palette.</summary>
+    /// <summary>Déclenché après chaque changement de choix : chaque fenêtre applique le nouveau thème.</summary>
     public static event Action? Changed;
-
-    public static ThemeChoice Parse(string? value) => value switch
-    {
-        "light" => ThemeChoice.Light,
-        "dark" => ThemeChoice.Dark,
-        _ => ThemeChoice.System,
-    };
-
-    public static string ToSetting(ThemeChoice choice) => choice switch
-    {
-        ThemeChoice.Light => "light",
-        ThemeChoice.Dark => "dark",
-        _ => "system",
-    };
 
     public static void Apply(ThemeChoice choice)
     {
         Choice = choice;
-        if (!_listening)
-        {
-            SystemEvents.UserPreferenceChanged += OnUserPreferenceChanged;
-            _listening = true;
-        }
-
-        bool dark = choice == ThemeChoice.Dark || (choice == ThemeChoice.System && WindowsUsesDarkApps());
-        if (!_applied || dark != IsDark)
-        {
-            // App.xaml fusionne la palette claire en premier dictionnaire : on la remplace à chaud.
-            var merged = Application.Current.Resources.MergedDictionaries;
-            var palette = new ResourceDictionary
-            {
-                Source = new Uri($"pack://application:,,,/BarcodeBoard;component/Themes/{(dark ? "Dark" : "Light")}.xaml"),
-            };
-            if (merged.Count == 0) merged.Add(palette); else merged[0] = palette;
-            _applied = true;
-        }
-        IsDark = dark;
         Changed?.Invoke();
     }
 
-    private static bool _applied;
-
-    private static bool WindowsUsesDarkApps()
+    public static ElementTheme Requested => Choice switch
     {
-        try
-        {
-            using var key = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize");
-            return key?.GetValue("AppsUseLightTheme") is int v && v == 0;
-        }
-        catch (Exception ex) when (ex is System.Security.SecurityException or UnauthorizedAccessException)
-        {
-            return false;
-        }
-    }
+        ThemeChoice.Light => ElementTheme.Light,
+        ThemeChoice.Dark => ElementTheme.Dark,
+        _ => ElementTheme.Default,
+    };
 
-    private static void OnUserPreferenceChanged(object sender, UserPreferenceChangedEventArgs e)
+    /// <summary>Boutons Réduire / Agrandir / Fermer, dessinés par Windows, dans le thème de la fenêtre.</summary>
+    public static TitleBarTheme TitleBar => Choice switch
     {
-        if (Choice != ThemeChoice.System) return;
-        Application.Current?.Dispatcher.BeginInvoke(() => Apply(ThemeChoice.System));
+        ThemeChoice.Light => TitleBarTheme.Light,
+        ThemeChoice.Dark => TitleBarTheme.Dark,
+        _ => TitleBarTheme.UseDefaultAppMode,
+    };
+
+    /// <summary>Pinceau de la palette d'un thème (App.xaml), pour les fonds choisis en code (couches sur Mica ou non).</summary>
+    public static Brush Brush(string key, ElementTheme actual)
+    {
+        var palette = (ResourceDictionary)Application.Current.Resources.ThemeDictionaries[actual == ElementTheme.Dark ? "Dark" : "Light"];
+        return (Brush)palette[key];
     }
 }

@@ -1,9 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.ComponentModel;
-using System.IO;
 using System.Runtime.CompilerServices;
-using System.Windows.Media.Imaging;
 using BarcodeBoard.Core;
 
 namespace BarcodeBoard;
@@ -27,10 +25,13 @@ public abstract class Observable : INotifyPropertyChanged
 /// <summary>Un code de l'onglet : texte, type et image prête à afficher.</summary>
 public sealed class CodeItemViewModel : Observable
 {
+    /// <summary>Rayon du flou des codes non visés en mode scan, en pixels logiques.</summary>
+    public const double BlurRadius = 22;
+
     private string _text;
     private CodeType _type;
     private CodeResult _result;
-    private BitmapSource? _image;
+    private CodeBitmap? _image, _blurred;
     private bool _isSelected, _isScanFocus, _isBlurred, _dropBefore, _dropAfter;
 
     public CodeItemViewModel(TabViewModel owner, string text, CodeType type)
@@ -73,14 +74,31 @@ public sealed class CodeItemViewModel : Observable
     public bool IsCode128 { get => Type == CodeType.Code128; set { if (value) Type = CodeType.Code128; } }
     public string TypeLabel => Type == CodeType.Qr ? Loc.QrCode : Loc.Code128;
 
-    public BitmapSource? Image { get => _image; private set => Set(ref _image, value); }
+    /// <summary>Image nette du code (null : erreur ou code trop large pour sa carte).</summary>
+    public CodeBitmap? Image
+    {
+        get => _image;
+        private set
+        {
+            if (!Set(ref _image, value)) return;
+            _blurred = null;
+            Raise(nameof(ShownImage));
+        }
+    }
+
+    /// <summary>Image affichée : floutée en mode scan si ce n'est pas le code visé (calculée une fois).</summary>
+    public CodeBitmap? ShownImage => IsBlurred && _image is not null ? _blurred ??= CodeBitmaps.Blur(_image, BlurRadius) : _image;
+
     public CodeMatrix? Matrix => _result.Matrix;
     public bool HasError => !_result.Ok;
+    /// <summary>Copie de l'image et plein écran : impossibles seulement pour un code en erreur (un code trop large le peut).</summary>
+    public bool CanCopy => _result.Ok;
     public string? ErrorMessage => _result.Error?.Message;
     /// <summary>Code valide, mais trop large pour la place disponible même à un pixel par module.</summary>
     public bool TooWide => _result.Ok && Image is null;
     /// <summary>À la place du code : une erreur, ou un code trop large (jamais un code coupé, illisible).</summary>
     public bool ShowPlaceholder => HasError || TooWide;
+    public bool ShowImage => !ShowPlaceholder;
     public string? PlaceholderMessage => HasError ? ErrorMessage : TooWide ? Loc.TooWide : null;
     /// <summary>Code 128 impossible à afficher (caractère refusé, texte trop long ou trop large) : un QR code le peut.</summary>
     public bool CanSwitchToQr => Type == CodeType.Code128
@@ -90,9 +108,46 @@ public sealed class CodeItemViewModel : Observable
     public double PlaceholderWidth => Owner.Main.CodeSize;
     public double PlaceholderHeight => Type == CodeType.Qr ? Owner.Main.CodeSize : Math.Round(Owner.Main.CodeSize * CodeRaster.BarcodeHeightRatio);
 
-    public bool IsSelected { get => _isSelected; set => Set(ref _isSelected, value); }
-    public bool IsScanFocus { get => _isScanFocus; set => Set(ref _isScanFocus, value); }
-    public bool IsBlurred { get => _isBlurred; set => Set(ref _isBlurred, value); }
+    public bool IsSelected
+    {
+        get => _isSelected;
+        set { if (Set(ref _isSelected, value)) Raise(nameof(ShowRing)); }
+    }
+
+    public bool IsScanFocus
+    {
+        get => _isScanFocus;
+        set
+        {
+            if (!Set(ref _isScanFocus, value)) return;
+            Raise(nameof(ShowRing));
+            Raise(nameof(HidesPointer));
+        }
+    }
+
+    public bool IsBlurred
+    {
+        get => _isBlurred;
+        set
+        {
+            if (!Set(ref _isBlurred, value)) return;
+            Raise(nameof(ShownImage));
+            Raise(nameof(NotBlurred));
+            Raise(nameof(CodeOpacity));
+            Raise(nameof(DetailsOpacity));
+        }
+    }
+
+    public bool NotBlurred => !IsBlurred;
+    /// <summary>Anneau de sélection : code en cours de modification, ou code visé en mode scan.</summary>
+    public bool ShowRing => IsSelected || IsScanFocus;
+    /// <summary>Le pointeur ne doit pas masquer le code pendant la lecture ; sans code affiché, il reste visible.</summary>
+    public bool HidesPointer => IsScanFocus && !ShowPlaceholder;
+    /// <summary>Code flouté en mode scan : estompé.</summary>
+    public double CodeOpacity => IsBlurred ? 0.25 : 1;
+    /// <summary>Texte et boutons de la carte : masqués sur un code flouté, sans changer la taille de la carte.</summary>
+    public double DetailsOpacity => IsBlurred ? 0 : 1;
+
     public bool DropBefore { get => _dropBefore; set => Set(ref _dropBefore, value); }
     public bool DropAfter { get => _dropAfter; set => Set(ref _dropAfter, value); }
 
@@ -100,21 +155,25 @@ public sealed class CodeItemViewModel : Observable
     {
         _result = CodeGenerator.Generate(_text, _type);
         Raise(nameof(HasError));
+        Raise(nameof(CanCopy));
         Raise(nameof(ErrorMessage));
         Raise(nameof(CanSwitchToQr));
+        Raise(nameof(Matrix));
         Rerender();
     }
 
     public void Rerender()
     {
         var main = Owner.Main;
-        Image = _result.Ok ? CodeImages.ForScreen(_result.Matrix!, main.CodeSize, main.DpiScale, main.CodeMaxWidth) : null;
+        Image = _result.Ok ? CodeBitmaps.ForScreen(_result.Matrix!, main.CodeSize, main.DpiScale, main.CodeMaxWidth) : null;
         Raise(nameof(TooWide));
         Raise(nameof(ShowPlaceholder));
+        Raise(nameof(ShowImage));
         Raise(nameof(PlaceholderMessage));
         Raise(nameof(CanSwitchToQr));
         Raise(nameof(PlaceholderWidth));
         Raise(nameof(PlaceholderHeight));
+        Raise(nameof(HidesPointer));
     }
 
     public CodeEntry ToEntry() => new(Text, Type);
@@ -152,6 +211,7 @@ public sealed class TabViewModel : Observable
             c.Rerender();
         }
     }
+
     public ObservableCollection<CodeItemViewModel> Codes { get; } = [];
 
     public string? FilePath
@@ -176,7 +236,13 @@ public sealed class TabViewModel : Observable
     public string? CustomName => _customName;
     public string ToolTip => FilePath is null ? Name : $"{Name}\n{FilePath}";
 
-    public bool IsRenaming { get => _isRenaming; private set => Set(ref _isRenaming, value); }
+    public bool IsRenaming
+    {
+        get => _isRenaming;
+        private set { if (Set(ref _isRenaming, value)) Raise(nameof(NotRenaming)); }
+    }
+
+    public bool NotRenaming => !IsRenaming;
     public string RenameText { get => _renameText; set => Set(ref _renameText, value ?? ""); }
 
     public void BeginRename()
@@ -216,6 +282,7 @@ public sealed class TabViewModel : Observable
     public bool IsPristine => FilePath is null && !IsDirty && Codes.Count == 0 && _draft.Length == 0 && _customName is null;
 
     public bool HasCodes => Codes.Count > 0;
+    public bool IsEmpty => Codes.Count == 0;
     public string CountLabel => Loc.Count(Codes.Count);
 
     // ---- Sélection et zone de saisie ----
@@ -231,6 +298,7 @@ public sealed class TabViewModel : Observable
             if (_selected is not null) _selected.IsSelected = true;
             Raise();
             Raise(nameof(IsEditing));
+            Raise(nameof(NotEditing));
             Raise(nameof(ComposerText));
             Raise(nameof(ComposerIsQr));
             Raise(nameof(ComposerIsCode128));
@@ -238,6 +306,7 @@ public sealed class TabViewModel : Observable
     }
 
     public bool IsEditing => SelectedCode is not null;
+    public bool NotEditing => SelectedCode is null;
 
     public string ComposerText
     {
@@ -351,17 +420,19 @@ public sealed class TabViewModel : Observable
     private void OnCodesChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
         Raise(nameof(HasCodes));
+        Raise(nameof(IsEmpty));
         Raise(nameof(CountLabel));
         if (Main.ScanMode) Main.UpdateScanFlags();
     }
 }
 
 /// <summary>Index circulaire : après le dernier élément vient le premier, et inversement.</summary>
-internal static class Cyclic
+public static class Cyclic
 {
     public static int Wrap(int index, int count) => (index % count + count) % count;
 }
 
+/// <summary>Une fenêtre : ses onglets, la taille des codes, le mode scan.</summary>
 public sealed class MainViewModel : Observable
 {
     public const double MinSize = 110, MaxSize = 280, DefaultSize = 160;
@@ -374,18 +445,26 @@ public sealed class MainViewModel : Observable
     /// <summary>Numéro des onglets « Sans titre », commun à toutes les fenêtres : jamais deux « Sans titre 1 ».</summary>
     private static int _untitled;
 
+    public MainViewModel() => Tabs.CollectionChanged += (_, _) => Raise(nameof(HasTabs));
+
     public ObservableCollection<TabViewModel> Tabs { get; } = [];
 
-    public TabViewModel SelectedTab
+    /// <summary>Faux seulement pendant un instant : fenêtre neuve qui attend un onglet arraché, ou vidée par une fusion.</summary>
+    public bool HasTabs => Tabs.Count > 0;
+
+    public TabViewModel? SelectedTab
     {
-        get => _selectedTab!;
+        get => _selectedTab;
         set
         {
             if (_selectedTab == value) return;
             if (_selectedTab is not null) _selectedTab.IsActive = false;
             _selectedTab = value;
-            _selectedTab.IsActive = true;
-            if (ScanMode) _selectedTab.ScanFocus ??= _selectedTab.Codes.FirstOrDefault();
+            if (_selectedTab is not null)
+            {
+                _selectedTab.IsActive = true;
+                if (ScanMode) _selectedTab.ScanFocus ??= _selectedTab.Codes.FirstOrDefault();
+            }
             Raise();
             LastRead = null;
             UpdateScanFlags();
@@ -405,7 +484,7 @@ public sealed class MainViewModel : Observable
     public double DpiScale
     {
         get => _dpiScale;
-        set { if (Set(ref _dpiScale, value)) RerenderAll(); }
+        set { if (value > 0 && Set(ref _dpiScale, value)) RerenderAll(); }
     }
 
     public bool SideOpen { get => _sideOpen; set => Set(ref _sideOpen, value); }
@@ -433,9 +512,8 @@ public sealed class MainViewModel : Observable
             if (!Set(ref _scanMode, value)) return;
             Raise(nameof(NotScanMode));
             LastRead = null;
-            if (value)
+            if (value && SelectedTab is { } tab)
             {
-                var tab = SelectedTab;
                 tab.ScanFocus = tab.SelectedCode ?? tab.ScanFocus ?? tab.Codes.FirstOrDefault();
                 tab.SelectedCode = null;
             }
@@ -485,8 +563,8 @@ public sealed class MainViewModel : Observable
     {
         int index = Tabs.IndexOf(tab);
         if (index < 0) return;
-        if (tab == _selectedTab && Tabs.Count > 1)
-            SelectedTab = Tabs[index + 1 < Tabs.Count ? index + 1 : index - 1];
+        if (tab == _selectedTab)
+            SelectedTab = Tabs.Count > 1 ? Tabs[index + 1 < Tabs.Count ? index + 1 : index - 1] : null;
         Tabs.Remove(tab);
         tab.IsActive = false;
     }

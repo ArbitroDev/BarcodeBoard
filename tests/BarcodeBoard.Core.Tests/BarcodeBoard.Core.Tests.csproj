@@ -20,6 +20,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\BarcodeBoard.Core\BarcodeBoard.Core.csproj" />
+    <ProjectReference Include="..\..\src\BarcodeBoard.ViewModels\BarcodeBoard.ViewModels.csproj" />
   </ItemGroup>
 
 </Project>

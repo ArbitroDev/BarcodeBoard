@@ -4,7 +4,7 @@ namespace BarcodeBoard;
 
 /// <summary>
 /// Textes de l'interface, en français et en anglais. La langue suit celle de Windows (<see cref="Lang"/>).
-/// Dans le XAML : <c>{x:Static local:Loc.Save}</c>.
+/// Dans le XAML : <c>{x:Bind local:Loc.Save}</c>.
 /// </summary>
 public static class Loc
 {
@@ -14,9 +14,6 @@ public static class Loc
     public static string AppName => T("Tableau de code-barres", "Barcode Board");
 
     // ---- Barre de titre et onglets ----
-    public static string Minimize => T("Réduire", "Minimize");
-    public static string Maximize => T("Agrandir", "Maximize");
-    public static string Close => T("Fermer", "Close");
     public static string SettingsTip => T("Paramètres (Ctrl+,)", "Settings (Ctrl+,)");
     public static string Settings => T("Paramètres", "Settings");
     public static string AppTheme => T("Thème de l'application", "App theme");
@@ -31,6 +28,8 @@ public static class Loc
     public static string WindowLabel(string selectedTab, int tabCount) =>
         tabCount == 1 ? selectedTab : T($"{selectedTab} et {tabCount - 1} autre(s)", $"{selectedTab} and {tabCount - 1} more");
     public static string CloseTab => T("Fermer l'onglet", "Close tab");
+    public static string Rename => T("Renommer", "Rename");
+    public static string CloseTabShortcut => "Ctrl+W";
     public static string Untitled(int n) => T($"Sans titre {n}", $"Untitled {n}");
 
     // ---- Barre d'outils ----
@@ -98,7 +97,7 @@ public static class Loc
     public static string Counter(int index, int total) => T($"{index} sur {total}", $"{index} of {total}");
 
     // ---- Fichiers ----
-    public static string FileFilter => T("Onglets de codes (*.codes)|*.codes", "Barcode Board tabs (*.codes)|*.codes");
+    public static string FileTypeName => T("Onglets de codes", "Barcode Board tabs");
     public static string OpenTitle => T("Ouvrir un onglet", "Open a tab");
     public static string OpenFailedTitle => T("Ouverture impossible", "Unable to open");
     public static string SaveTitle => T("Enregistrer l'onglet", "Save tab");
@@ -126,4 +125,5 @@ public static class Loc
                                                  "If you don't save, changes to this tab will be lost.");
     public static string DontSave => T("Ne pas enregistrer", "Don't save");
     public static string Cancel => T("Annuler", "Cancel");
+    public static string Ok => "OK";
 }
